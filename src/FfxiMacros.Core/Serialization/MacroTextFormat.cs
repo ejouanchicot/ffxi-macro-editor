@@ -1,4 +1,5 @@
 using System.Globalization;
+using FfxiMacros.Core.Text;
 using System.Text;
 using FfxiMacros.Core.Io;
 using FfxiMacros.Core.Model;
@@ -36,13 +37,10 @@ public static class MacroTextFormat
     {
         ArgumentNullException.ThrowIfNull(book);
 
-        var sb = new StringBuilder();
-        sb.AppendLine("# FFXI macro set");
-        if (!string.IsNullOrWhiteSpace(title))
-            sb.AppendLine(CultureInfo.InvariantCulture, $"# {title}");
-        sb.AppendLine();
-
+        var body = new StringBuilder();
         bool any = false;
+        bool quotedAName = false;
+
         for (int index = 0; index < MacroBook.MacroCount; index++)
         {
             var macro = book.Macros[index];
@@ -50,20 +48,61 @@ public static class MacroTextFormat
                 continue;
 
             any = true;
-            sb.AppendLine(CultureInfo.InvariantCulture, $"[{MacroSlot.Describe(index)}] {QuoteName(macro.Name)}");
+            string name = QuoteName(macro.Name);
+            quotedAName |= name.StartsWith('"');
+            body.AppendLine(CultureInfo.InvariantCulture, $"[{MacroSlot.Describe(index)}] {name}");
 
             // Written up to the last non-empty line, gaps included: a macro may leave line 2 empty
             // and still use line 3, and dropping the gap would shift the commands up.
             for (int line = 0; line <= LastUsedLine(macro); line++)
-                sb.AppendLine(macro.Lines[line]);
+                body.AppendLine(macro.Lines[line]);
 
-            sb.AppendLine();
+            body.AppendLine();
         }
 
         if (!any)
-            sb.AppendLine("# (aucune macro)");
+            body.AppendLine("# (no macro)");
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# FFXI macro set");
+        if (!string.IsNullOrWhiteSpace(title))
+            sb.AppendLine(CultureInfo.InvariantCulture, $"# {title}");
+
+        AppendLegend(sb, body.ToString(), quotedAName);
+        sb.AppendLine();
+        sb.Append(body);
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Explains the three notations this format uses, and only the ones the file actually contains:
+    /// a set with no auto-translate phrase should not be handed a paragraph about them.
+    /// </summary>
+    /// <remarks>
+    /// The <c>{00}</c> note earns its place. A field whose first byte is null reads as empty in the
+    /// editor, because that is what the game makes of it — but the export has to carry the bytes to
+    /// round-trip, so the line reappears here and would otherwise look like a mystery.
+    /// </remarks>
+    private static void AppendLegend(StringBuilder sb, string body, bool quotedAName)
+    {
+        var notes = new List<string>();
+
+        if (body.Contains(FfxiText.PhraseOpen, StringComparison.Ordinal))
+            notes.Add("«Provoke»  an auto-translate phrase — six bytes in the file, whatever its length");
+
+        if (body.Contains("{00}", StringComparison.Ordinal))
+            notes.Add("{00}       a byte the game stops reading at — that line does nothing in game");
+
+        if (quotedAName)
+            notes.Add("\"Box \"     a name whose spacing counts, quoted so a text editor cannot eat it");
+
+        if (notes.Count == 0)
+            return;
+
+        sb.AppendLine("#");
+        foreach (string note in notes)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"#   {note}");
     }
 
     /// <summary>
