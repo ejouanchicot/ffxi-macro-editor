@@ -22,3 +22,7 @@ GITHUB.md
 
 # Brief de départ : document de travail personnel, pas de la documentation du projet.
 PROMPT_FFXI_Macro_Editor.md
+
+# Sets exportes depuis l'application : ils portent le nom du personnage et ses macros.
+/*-book*-set*.txt
+/*-book*-set*.json
