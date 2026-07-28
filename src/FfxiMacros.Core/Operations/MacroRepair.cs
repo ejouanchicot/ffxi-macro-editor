@@ -11,7 +11,7 @@ namespace FfxiMacros.Core.Operations;
 public sealed record MacroRepairSuggestion(int MacroIndex, int LineIndex, string Before, string After, string Reason)
 {
     public string Where =>
-        LineIndex < 0 ? $"{MacroSlot.Describe(MacroIndex)} · nom" : $"{MacroSlot.Describe(MacroIndex)} · ligne {LineIndex + 1}";
+        LineIndex < 0 ? $"{MacroSlot.Describe(MacroIndex)} · name" : $"{MacroSlot.Describe(MacroIndex)} · line {LineIndex + 1}";
 }
 
 /// <summary>
@@ -131,7 +131,7 @@ public static class MacroRepair
         if (trailing >= 0)
         {
             result = result[..trailing];
-            reasons.Add("reste d'une ligne plus longue après le terminateur");
+            reasons.Add("remains of a longer line after the terminator");
         }
 
         result = result.TrimEnd();

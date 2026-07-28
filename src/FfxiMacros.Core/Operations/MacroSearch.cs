@@ -42,7 +42,7 @@ public sealed record MacroSearchHit(
             if (MacroIndex >= 0)
                 place += $" · {MacroSlot.Describe(MacroIndex)}";
             if (LineIndex >= 0)
-                place += $" · ligne {LineIndex + 1}";
+                place += $" · line {LineIndex + 1}";
             return place;
         }
     }

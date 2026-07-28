@@ -372,6 +372,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             SelectedMacro = null;
             SetStatus(ex.ToString(), error: true);
         }
+        finally
+        {
+            // Repair, Export and Import need the set on hand, so they can only be judged once it
+            // has been read. The selection setter asks too early — at that point nothing is loaded
+            // yet. A set that failed to load leaves them refusing to run, which is right.
+            RaiseCommandStates();
+        }
     }
 
     private bool CanSaveCurrent() => _currentSet is { IsDirty: true, HasError: false };
@@ -474,12 +481,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DirtySummary));
     }
 
+    /// <summary>
+    /// Re-asks every command whether it can run. Missing one here leaves its button greyed out for
+    /// the rest of the session, since nothing else ever re-evaluates it.
+    /// </summary>
     private void RaiseCommandStates()
     {
         SaveCommand.RaiseCanExecuteChanged();
         SaveAllCommand.RaiseCanExecuteChanged();
         ReloadCommand.RaiseCanExecuteChanged();
         RefreshCommand.RaiseCanExecuteChanged();
+        RepairCommand.RaiseCanExecuteChanged();
+        ExportSetCommand.RaiseCanExecuteChanged();
+        ImportSetCommand.RaiseCanExecuteChanged();
     }
 
     private void TrySaveSettings()

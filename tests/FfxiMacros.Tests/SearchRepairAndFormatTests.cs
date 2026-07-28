@@ -64,7 +64,7 @@ public class MacroSearchTests : IDisposable
         Assert.Contains("Book 1", hit.Location, StringComparison.Ordinal);
         Assert.Contains("Set 1", hit.Location, StringComparison.Ordinal);
         Assert.Contains("Ctrl-1", hit.Location, StringComparison.Ordinal);
-        Assert.Contains("ligne 1", hit.Location, StringComparison.Ordinal);
+        Assert.Contains("line 1", hit.Location, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class MacroRepairTests
         var suggestion = Assert.Single(MacroRepair.Inspect(book), s => s.LineIndex < 0 && s.MacroIndex == 6);
 
         Assert.Equal("SA", suggestion.After);
-        Assert.Contains("nom", suggestion.Where, StringComparison.Ordinal);
+        Assert.Contains("name", suggestion.Where, StringComparison.Ordinal);
     }
 
     [Fact]
