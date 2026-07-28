@@ -21,21 +21,31 @@ public sealed class BookInfo
 
     public MacroSetInfo[] Sets { get; }
 
-    /// <summary>Title from <c>mcr.ttl</c> / <c>mcr_2.ttl</c>, falling back to the game's own placeholder.</summary>
+    /// <summary>
+    /// Title from <c>mcr.ttl</c> / <c>mcr_2.ttl</c>, falling back to the game's own placeholder.
+    /// </summary>
+    /// <remarks>
+    /// What the game shows, which is not always what the field holds. Renaming a book in game writes
+    /// the new name over the old one and leaves whatever was longer sitting past the terminator — a
+    /// book called <c>dncdrgGeo</c> and then cleared reads as <c>Book04{00}eo</c> on disk. The game
+    /// stops at the terminator; so does this. The same rule the macros have followed all along.
+    /// </remarks>
     public string Title
     {
         get
         {
-            string stored = Character.Titles[Number];
-            return string.IsNullOrEmpty(stored) ? BookTitleSet.DefaultTitle(Number) : stored;
+            string visible = Operations.MacroRepair.VisibleInGame(Character.Titles[Number]);
+            return visible.Length == 0 ? BookTitleSet.DefaultTitle(Number) : visible;
         }
         set => Character.Titles[Number] = value;
     }
 
-    /// <summary>True when the stored title is empty or still the <c>BookNN</c> placeholder.</summary>
+    /// <summary>Everything the field holds, dead tail included — what a repair would drop.</summary>
+    public string StoredTitle => Character.Titles[Number];
+
+    /// <summary>True when the title the game shows is empty or still the <c>BookNN</c> placeholder.</summary>
     public bool IsUntitled =>
-        string.IsNullOrEmpty(Character.Titles[Number])
-        || string.Equals(Character.Titles[Number], BookTitleSet.DefaultTitle(Number), StringComparison.Ordinal);
+        string.Equals(Title, BookTitleSet.DefaultTitle(Number), StringComparison.Ordinal);
 
     public bool Exists => Sets.Any(s => s.Exists);
 

@@ -638,7 +638,12 @@ public sealed partial class MainWindowViewModel
             return;
 
         string title = book.RenameDraft.Trim();
-        if (title.Length == 0 || string.Equals(title, book.Info.Title, StringComparison.Ordinal))
+
+        // An emptied field is not a cancelled rename: it is how a book goes back to its own name.
+        // It is also the only way to scrub the tail of an older name the game left in the field,
+        // since writing a title fills all sixteen bytes.
+        bool clearing = title.Length == 0;
+        if (!clearing && string.Equals(title, book.Info.Title, StringComparison.Ordinal))
         {
             book.IsRenaming = false;
             return;
@@ -654,7 +659,9 @@ public sealed partial class MainWindowViewModel
             book.IsRenaming = false;
             book.RefreshUpwards();
 
-            SetStatus(Loc.T("Status.BookRenamed", book.Info.Number, title)
+            SetStatus((clearing
+                          ? Loc.T("Status.BookTitleCleared", book.Info.Number)
+                          : Loc.T("Status.BookRenamed", book.Info.Number, title))
                       + (IsGameRunning ? Loc.T("Game.SaveAdvice", book.Info.Number) : ""));
         }
         catch (MacroFileException ex)

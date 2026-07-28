@@ -367,6 +367,47 @@ public class EditingViewModelTests : IDisposable
     }
 
     [Fact]
+    public void ATitleTheGameOverwroteReadsAsTheGameShowsIt()
+    {
+        // Clearing a book's name in game writes the placeholder over the old one and leaves what
+        // was longer sitting past the terminator: 'dncdrgGeo' cleared becomes 'Book04{00}eo'.
+        var titles = FfxiMacros.Core.Discovery.CharacterTitles.Load(Path.Combine(_temp.UserFolder, "aaaa1"));
+        titles[4] = "Book04{00}eo";
+        titles.SaveHalfFor(4);
+
+        var book = NewViewModel().Characters.OfType<CharacterNodeViewModel>()
+            .First(c => c.Character.Id == "aaaa1").Books.First(b => b.Info.Number == 4);
+
+        Assert.Equal("Book04", book.Info.Title);
+        Assert.True(book.Info.IsUntitled);
+        Assert.Equal("Book04{00}eo", book.Info.StoredTitle);      // nothing is thrown away silently
+        Assert.Contains("tail of an older name", book.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmptyingTheNameScrubsTheFieldRatherThanCancelling()
+    {
+        var titles = FfxiMacros.Core.Discovery.CharacterTitles.Load(Path.Combine(_temp.UserFolder, "aaaa1"));
+        titles[4] = "Book04{00}eo";
+        titles.SaveHalfFor(4);
+
+        var viewModel = NewViewModel();
+        var book = viewModel.Characters.OfType<CharacterNodeViewModel>()
+            .First(c => c.Character.Id == "aaaa1").Books.First(b => b.Info.Number == 4);
+
+        viewModel.BeginRename(book);
+        book.RenameDraft = "";
+        viewModel.CommitRename(book);
+
+        Assert.Equal("", book.Info.StoredTitle);
+        Assert.Equal("Book04", book.Info.Title);
+
+        // And on disk, where the game will read it.
+        var written = FfxiMacros.Core.Discovery.CharacterTitles.Load(Path.Combine(_temp.UserFolder, "aaaa1"));
+        Assert.Equal("", written[4]);
+    }
+
+    [Fact]
     public void CancellingARenameLeavesTheTitleAlone()
     {
         var viewModel = NewViewModel();
@@ -462,7 +503,7 @@ public class EditingViewModelTests : IDisposable
     public void WhatTheClientHoldsInMemoryBeatsEverythingElse()
     {
         // mcr.sys says book 1, Windower reports book 3, the client itself is on book 7. Only the
-        // last one is true whatever the player did — including picking a book from the game's menu.
+        // last one is true whatever the player did ï¿½ including picking a book from the game's menu.
         _temp.SetCurrentSet("aaaa1", 0);
         WriteLiveReport("aaaa1", "Tetsouo", book: 3, set: 1);
         _settings.SetName("aaaa1", "Tetsouo");
@@ -602,7 +643,7 @@ public class EditingViewModelTests : IDisposable
     public void ALiveReportIsDroppedOnceTheClientWritesThatBook()
     {
         // Changing book from the game's own menu sends no command, so the addon never hears it. What
-        // it does leave behind is the client writing the book it is leaving — proof the report is
+        // it does leave behind is the client writing the book it is leaving ï¿½ proof the report is
         // now describing where the player was, not where they are.
         WriteLiveReport("aaaa1", "Tetsouo", book: 1, set: 1);
         var viewModel = NewViewModel();

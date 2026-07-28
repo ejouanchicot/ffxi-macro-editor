@@ -81,6 +81,11 @@ public sealed class BookNodeViewModel : TreeNodeViewModel
                           : sets == 1 ? Loc.T("Tree.SetOne")
                           : Loc.T("Tree.SetMany", sets);
 
+            // Nothing is hidden without saying so: a title the game overwrote with a shorter one
+            // still carries the tail of the old one, which only a rename will clear.
+            if (Core.Operations.MacroRepair.IsDamaged(Info.StoredTitle))
+                counts = $"{counts} · {Loc.T("Tree.TitleTail")}";
+
             if (!IsOpenInGame)
                 return counts;
 

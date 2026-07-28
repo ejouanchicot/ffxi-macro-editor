@@ -112,6 +112,9 @@ internal static class Strings
         ["Tree.OpenInGame"] = "where the game left this character, from its own mcr.sys",
         ["Tree.OpenInGameLive"] = "the book open in game, reported by Windower",
         ["Tree.OpenInGameMemory"] = "the book open in game, read from the client itself",
+        ["Tree.TitleTail"] =
+            "the title field still holds the tail of an older name, which the game does not show; "
+            + "renaming this book clears it",
         ["Tree.CharacterDetail"] = "{0}, {1}",
         ["Tree.Skipped"] = "{0} file(s) skipped",
 
@@ -144,6 +147,7 @@ internal static class Strings
         ["Status.SetCleared"] = "Set {0} of book {1} emptied. Save to apply, or reload to bring it back.",
         ["Status.SetAlreadyEmpty"] = "Set {0} of book {1} is already empty.",
         ["Status.BookRenamed"] = "Book {0} is now “{1}”.",
+        ["Status.BookTitleCleared"] = "Book {0} goes back to its own name, and the field is scrubbed.",
         ["Status.CharacterRenamed"] =
             "{0} is shown as “{1}” from now on. That is a label kept by the editor — the folder on "
             + "disk keeps its own name, which is the one the game looks for.",
@@ -290,6 +294,9 @@ internal static class Strings
         ["Tree.OpenInGame"] = "là où le jeu a laissé ce personnage, d'après son propre mcr.sys",
         ["Tree.OpenInGameLive"] = "le book ouvert en jeu, rapporté par Windower",
         ["Tree.OpenInGameMemory"] = "le book ouvert en jeu, lu dans le client lui-même",
+        ["Tree.TitleTail"] =
+            "le champ du titre garde encore la fin d'un ancien nom, que le jeu n'affiche pas ; "
+            + "renommer ce book l'efface",
         ["Tree.CharacterDetail"] = "{0}, {1}",
         ["Tree.Skipped"] = "{0} fichier(s) ignoré(s)",
 
@@ -322,6 +329,7 @@ internal static class Strings
         ["Status.SetCleared"] = "Set {0} du book {1} vidé. Enregistre pour appliquer, ou recharge pour le récupérer.",
         ["Status.SetAlreadyEmpty"] = "Le set {0} du book {1} est déjà vide.",
         ["Status.BookRenamed"] = "Le book {0} s'appelle maintenant « {1} ».",
+        ["Status.BookTitleCleared"] = "Le book {0} reprend son nom d'origine, et le champ est nettoyé.",
         ["Status.CharacterRenamed"] =
             "{0} s'affiche désormais « {1} ». C'est une étiquette tenue par l'éditeur — le dossier sur "
             + "le disque garde son nom, et c'est celui-là que le jeu va chercher.",
