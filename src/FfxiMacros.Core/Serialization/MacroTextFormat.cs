@@ -33,34 +33,63 @@ public static class MacroTextFormat
 
     private const string CommentPrefix = "#";
 
+    /// <summary>Opens a set inside a multi-set file: <c>[Set 3]</c>.</summary>
+    private const string SetPrefix = "Set";
+
     public static string Export(MacroBook book, string? title = null)
     {
         ArgumentNullException.ThrowIfNull(book);
+        return Export([new MacroSetExport(0, book)], title);
+    }
+
+    /// <summary>
+    /// Writes several sets into one file — a whole book, in the game's sense of the word.
+    /// </summary>
+    /// <remarks>
+    /// Each one opens with a <c>[Set 3]</c> header. A set numbered 0 writes no header at all, which
+    /// is what a single-set export looks like and what older files already are.
+    /// </remarks>
+    public static string Export(IReadOnlyList<MacroSetExport> sets, string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(sets);
 
         var body = new StringBuilder();
-        bool any = false;
+        bool anyMacro = false;
         bool quotedAName = false;
 
-        for (int index = 0; index < MacroBook.MacroCount; index++)
+        foreach (var set in sets)
         {
-            var macro = book.Macros[index];
-            if (macro.IsEmpty)
-                continue;
+            if (set.SetNumber > 0)
+            {
+                body.AppendLine(CultureInfo.InvariantCulture, $"[{SetPrefix} {set.SetNumber}]");
+                body.AppendLine();
+            }
 
-            any = true;
-            string name = QuoteName(macro.Name);
-            quotedAName |= name.StartsWith('"');
-            body.AppendLine(CultureInfo.InvariantCulture, $"[{MacroSlot.Describe(index)}] {name}");
+            bool anyHere = false;
+            for (int index = 0; index < MacroBook.MacroCount; index++)
+            {
+                var macro = set.Book.Macros[index];
+                if (macro.IsEmpty)
+                    continue;
 
-            // Written up to the last non-empty line, gaps included: a macro may leave line 2 empty
-            // and still use line 3, and dropping the gap would shift the commands up.
-            for (int line = 0; line <= LastUsedLine(macro); line++)
-                body.AppendLine(macro.Lines[line]);
+                anyHere = anyMacro = true;
+                string name = QuoteName(macro.Name);
+                quotedAName |= name.StartsWith('"');
+                body.AppendLine(CultureInfo.InvariantCulture, $"[{MacroSlot.Describe(index)}] {name}");
 
-            body.AppendLine();
+                // Written up to the last non-empty line, gaps included: a macro may leave line 2
+                // empty and still use line 3, and dropping the gap would shift the commands up.
+                for (int line = 0; line <= LastUsedLine(macro); line++)
+                    body.AppendLine(macro.Lines[line]);
+
+                body.AppendLine();
+            }
+
+            if (!anyHere && set.SetNumber > 0)
+                body.AppendLine("# (empty)").AppendLine();
         }
 
-        if (!any)
+        if (!anyMacro && sets.Count <= 1)
             body.AppendLine("# (no macro)");
 
         var sb = new StringBuilder();
@@ -112,8 +141,26 @@ public static class MacroTextFormat
     /// <exception cref="MacroFileException">A slot header is malformed or a macro has too many lines.</exception>
     public static MacroBook Import(string text, MacroBook? into = null)
     {
+        var sets = ImportSets(text, into);
+        return sets[0].Book;
+    }
+
+    /// <summary>
+    /// Reads every set a file holds. A file with no <c>[Set 3]</c> header yields a single entry
+    /// numbered 0, which is what the caller should read as "whichever set you were pointing at".
+    /// </summary>
+    /// <param name="text">The exported text.</param>
+    /// <param name="into">
+    /// Where the first set lands. Later sets always get a fresh book, since one destination cannot
+    /// hold ten of them.
+    /// </param>
+    /// <exception cref="MacroFileException">The text is malformed.</exception>
+    public static IReadOnlyList<MacroSetExport> ImportSets(string text, MacroBook? into = null)
+    {
         ArgumentNullException.ThrowIfNull(text);
+        var found = new List<MacroSetExport>();
         var book = into ?? new MacroBook { Version = 1 };
+        int setNumber = 0;
 
         int current = -1;
         int number = 0;
@@ -157,7 +204,17 @@ public static class MacroTextFormat
                 if (close < 0)
                     throw new MacroFileException($"Line {number}: '[' with no matching ']'.");
 
-                current = ParseSlot(line[1..close], number);
+                string inside = line[1..close].Trim();
+                if (inside.StartsWith(SetPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    found.Add(new MacroSetExport(setNumber, book));
+                    setNumber = ParseSetNumber(inside[SetPrefix.Length..], number);
+                    book = new MacroBook { Version = 1 };
+                    current = -1;
+                    continue;
+                }
+
+                current = ParseSlot(inside, number);
                 book.Macros[current].Clear();
                 book.Macros[current].Name = UnquoteName(line[(close + 1)..]);
                 continue;
@@ -177,7 +234,25 @@ public static class MacroTextFormat
         }
 
         Flush(number);
-        return book;
+        found.Add(new MacroSetExport(setNumber, book));
+
+        // The first entry is the run of macros before any [Set n] header. In a file that opens with
+        // one — everything this editor writes for a book — that run is empty and says nothing.
+        if (found.Count > 1 && found[0].SetNumber == 0 && found[0].Book.Macros.All(m => m.IsEmpty))
+            found.RemoveAt(0);
+
+        return found;
+    }
+
+    private static int ParseSetNumber(string text, int lineNumber)
+    {
+        if (!int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int number)
+            || number is < 1 or > 10)
+        {
+            throw new MacroFileException($"Line {lineNumber}: '{text.Trim()}' is not a set number between 1 and 10.");
+        }
+
+        return number;
     }
 
     /// <summary>

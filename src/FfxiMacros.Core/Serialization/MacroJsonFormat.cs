@@ -165,4 +165,35 @@ public static class MacroJsonFormat
 
         return Apply(document.Sets[0], into);
     }
+
+    /// <summary>Writes several sets of one book into a single document.</summary>
+    public static string Export(
+        IReadOnlyList<MacroSetExport> sets, string? character = null, int? bookNumber = null, string? title = null)
+    {
+        ArgumentNullException.ThrowIfNull(sets);
+
+        var document = new MacroDocument
+        {
+            Character = character,
+            Book = bookNumber,
+            Title = title,
+            Sets = [.. sets.Select(set => ToDocument(set.Book, set.SetNumber))],
+        };
+
+        return Export(document);
+    }
+
+    /// <summary>
+    /// Reads every set the document holds, in file order. A set the export did not number comes
+    /// back as 0, the same as the text format, so callers treat the two alike.
+    /// </summary>
+    /// <exception cref="MacroFileException">The JSON is malformed or holds no set.</exception>
+    public static IReadOnlyList<MacroSetExport> ImportSets(string json)
+    {
+        var document = Parse(json);
+        if (document.Sets.Count == 0)
+            throw new MacroFileException("This export contains no set.");
+
+        return [.. document.Sets.Select(set => new MacroSetExport(set.Set, Apply(set)))];
+    }
 }

@@ -204,13 +204,22 @@ public sealed partial class MainWindowViewModel
     public AsyncRelayCommand ImportSetCommand =>
         _importSetCommand ??= new AsyncRelayCommand(ImportSetAsync, () => _currentSet?.IsLoaded == true);
 
+    /// <summary>
+    /// Exports the whole book — every set that exists on disk, in one file.
+    /// </summary>
+    /// <remarks>
+    /// A book is what a player thinks of as the macros for a job; exporting only the set on screen
+    /// left the other nine behind. Sets the game has never written are skipped rather than written
+    /// out empty, so a book with three sets in use produces a file with three sets in it.
+    /// </remarks>
     private async Task ExportSetAsync()
     {
         if (_currentSet?.Loaded is null || SaveFileAsync is null)
             return;
 
-        var book = _currentSet.Parent.Info;
-        string suggested = $"{_currentSet.Parent.Parent.Character.Id}-book{book.Number}-set{_currentSet.Info.SetNumber}";
+        var bookNode = _currentSet.Parent;
+        var book = bookNode.Info;
+        string suggested = $"{bookNode.Parent.Character.Id}-book{book.Number}";
 
         string? path = await SaveFileAsync(suggested + MacroTextFormat.FileExtension, MacroTextFormat.FileExtension);
         if (path is null)
@@ -218,15 +227,30 @@ public sealed partial class MainWindowViewModel
 
         try
         {
+            var sets = new List<MacroSetExport>();
+            foreach (var set in bookNode.Sets)
+            {
+                if (!set.Info.Exists)
+                    continue;
+
+                if (!set.IsLoaded)
+                    set.Load();
+
+                if (set.Loaded is not null)
+                    sets.Add(new MacroSetExport(set.Info.SetNumber, set.Loaded));
+            }
+
+            if (sets.Count == 0)
+                sets.Add(new MacroSetExport(_currentSet.Info.SetNumber, _currentSet.Loaded));
+
             bool json = path.EndsWith(MacroJsonFormat.FileExtension, StringComparison.OrdinalIgnoreCase);
             string content = json
-                ? MacroJsonFormat.Export(_currentSet.Loaded, _currentSet.Parent.Parent.Character.Id, book.Number,
-                    book.Title, _currentSet.Info.SetNumber)
-                : MacroTextFormat.Export(_currentSet.Loaded,
-                    $"{_currentSet.Parent.Parent.Character.Label} · book {book.Number} ({book.Title}) · set {_currentSet.Info.SetNumber}");
+                ? MacroJsonFormat.Export(sets, bookNode.Parent.Character.Id, book.Number, book.Title)
+                : MacroTextFormat.Export(sets,
+                    $"{bookNode.Parent.Character.Label} · book {book.Number} ({book.Title})");
 
             LongPath.WriteAllBytesAtomic(path, System.Text.Encoding.UTF8.GetBytes(content));
-            SetStatus($"Exporté vers {path}.");
+            SetStatus(Loc.T(sets.Count == 1 ? "Status.ExportedOne" : "Status.Exported", path, sets.Count));
         }
         catch (MacroFileException ex)
         {
@@ -248,21 +272,53 @@ public sealed partial class MainWindowViewModel
             string content = System.Text.Encoding.UTF8.GetString(LongPath.ReadAllBytes(path));
             bool json = path.EndsWith(MacroJsonFormat.FileExtension, StringComparison.OrdinalIgnoreCase);
 
-            if (json)
-                MacroJsonFormat.Import(content, _currentSet.Loaded);
-            else
-                MacroTextFormat.Import(content, _currentSet.Loaded);
+            var sets = json ? MacroJsonFormat.ImportSets(content) : MacroTextFormat.ImportSets(content);
+            int applied = ApplyImportedSets(sets);
 
-            foreach (var slot in _currentSet.Macros)
-                slot.NotifyMacroReplaced();
-            _currentSet.MarkDirty();
-
-            SetStatus($"Importé depuis {path}. Enregistre pour appliquer.");
+            SetStatus(Loc.T(applied == 1 ? "Status.ImportedOne" : "Status.Imported", path, applied));
         }
         catch (MacroFileException ex)
         {
             SetStatus(ex.ToString(), error: true);
         }
+    }
+
+    /// <summary>
+    /// Puts imported sets where they belong: a file that numbers its sets goes into those sets of
+    /// the current book, and one that does not — a single-set export — goes into the set on screen.
+    /// </summary>
+    /// <returns>How many sets were written into.</returns>
+    private int ApplyImportedSets(IReadOnlyList<MacroSetExport> sets)
+    {
+        int applied = 0;
+
+        foreach (var imported in sets)
+        {
+            var target = imported.SetNumber == 0
+                ? _currentSet
+                : _currentSet!.Parent.Sets.FirstOrDefault(s => s.Info.SetNumber == imported.SetNumber);
+
+            if (target is null)
+                continue;
+
+            if (!target.IsLoaded)
+                target.Load();
+            if (target.Loaded is not { } destination)
+                continue;
+
+            for (int index = 0; index < MacroBook.MacroCount; index++)
+                destination.Macros[index] = imported.Book.Macros[index].Clone();
+
+            foreach (var slot in target.Macros)
+                slot.NotifyMacroReplaced();
+
+            target.MarkDirty();
+            applied++;
+        }
+
+        RaiseDirtyState();
+        RaiseCommandStates();
+        return applied;
     }
 
     // ---------------------------------------------------------------- book copy / move
