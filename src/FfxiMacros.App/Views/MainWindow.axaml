@@ -5,6 +5,7 @@
         x:Class="FfxiMacros.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="FFXI Macro Editor"
+        Icon="/Assets/icon.png"
         Width="1620" Height="900"
         WindowStartupLocation="CenterScreen"
         MinWidth="1020" MinHeight="640"
@@ -35,9 +36,8 @@
       -->
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
                   Background="Transparent">
-        <Border Classes="badge">
-          <TextBlock Text="FM" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentText}" />
-        </Border>
+        <!-- The application's own icon, rather than two letters standing in for it. -->
+        <Image Source="/Assets/icon.png" Width="26" Height="26" VerticalAlignment="Center" />
         <TextBlock Text="FFXI Macro Editor" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
         <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,13" />
         <Button Content="{DynamicResource Header.Search}" Classes="ghost" Command="{Binding ToggleSearchCommand}"
@@ -58,20 +58,17 @@
       </StackPanel>
     </Border>
 
-    <!-- ============================== a character is in game and owns its current book -->
-    <Border DockPanel.Dock="Top" Classes="notice" IsVisible="{Binding ShowGameRunningBanner}">
-      <StackPanel Spacing="8" HorizontalAlignment="Left" MaxWidth="1100">
-        <TextBlock Text="{Binding GameRunningWarning}" TextWrapping="Wrap" />
-        <Button Content="{DynamicResource Notice.RecheckGame}" Command="{Binding RecheckGameCommand}" />
-      </StackPanel>
-    </Border>
-
     <!-- ===================================== confirmation for a book copy or move -->
     <Border DockPanel.Dock="Top" Classes="notice" IsVisible="{Binding HasPendingBookOperation}">
       <StackPanel Spacing="8" HorizontalAlignment="Left" MaxWidth="1100">
         <TextBlock Text="{Binding PendingBookOperation.Question}" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <Button Content="{DynamicResource Notice.Confirm}" Classes="accent" Command="{Binding ConfirmBookOperationCommand}" />
+          <!-- Unsaved edits do not cancel the copy: they are saved on the way through. -->
+          <Button Content="{DynamicResource Notice.SaveAndConfirm}" Classes="accent"
+                  Command="{Binding SaveAllAndConfirmCommand}"
+                  IsVisible="{Binding PendingBookOperation.NeedsSave, FallbackValue=False}" />
+          <Button Content="{DynamicResource Notice.Confirm}" Classes="accent" Command="{Binding ConfirmBookOperationCommand}"
+                  IsVisible="{Binding !PendingBookOperation.NeedsSave, FallbackValue=False}" />
           <Button Content="{DynamicResource Notice.Cancel}" Command="{Binding CancelBookOperationCommand}" />
         </StackPanel>
       </StackPanel>
@@ -83,8 +80,20 @@
         <TextBlock DockPanel.Dock="Right" Text="{Binding UserFolder}" Classes="caption"
                    Margin="12,0,0,0" MaxWidth="380" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding UserFolder}" />
+
+        <!--
+          Who is in game. A line in the corner rather than a banner over the editor: it matters
+          when you are about to save the book on screen, and the rest of the time it is noise.
+          Clicking it re-checks; the long explanation is the tooltip.
+        -->
+        <Button DockPanel.Dock="Right" Classes="ghost" Content="{Binding GameStatusSummary}"
+                Command="{Binding RecheckGameCommand}" IsVisible="{Binding IsGameRunning}"
+                FontSize="11" Padding="8,2" Margin="12,-3,0,-3"
+                ToolTip.Tip="{Binding GameRunningWarning}" />
         <TextBlock DockPanel.Dock="Left" Text="{Binding DirtySummary}" Classes="caption"
                    Margin="0,0,14,0" />
+        <TextBlock DockPanel.Dock="Left" Text="{Binding ClipboardSummary}" Classes="caption"
+                   Margin="0,0,14,0" MaxWidth="260" TextTrimming="CharacterEllipsis" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="12"
                    Classes.error="{Binding StatusIsError}" />
       </DockPanel>
@@ -99,11 +108,8 @@
       -->
       <Border Grid.Column="0" Classes="panel">
         <DockPanel>
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,13,12,10">
-            <TextBlock Grid.Column="0" Text="{DynamicResource Books.Title}" Classes="section" />
-            <CheckBox Grid.Column="1" Content="{DynamicResource Books.ShowEmpty}" IsChecked="{Binding ShowEmptyBooks}" FontSize="11"
-                      ToolTip.Tip="{DynamicResource Books.ShowEmpty.Tip}" />
-          </Grid>
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Books.Title}" Classes="section"
+                     Margin="16,13,12,10" />
 
           <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0"
                   Padding="10,10">
@@ -129,18 +135,53 @@
                   Number chip, name, set count. The chip is tinted by the job the book leads with,
                   so a run down the list reads as bands of colour rather than forty similar words.
                 -->
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4" Background="Transparent"
+                <Grid ColumnDefinitions="7,Auto,*,Auto,Auto" Margin="0,4" Background="Transparent"
                       Opacity="{Binding RowOpacity}" DragDrop.AllowDrop="True"
                       ToolTip.Tip="{Binding Detail}">
-                  <Border Grid.Column="0" Classes="rowBadge" Background="{Binding BadgeBackground}">
+                  <!--
+                    One menu for both kinds of row. The book entries are hidden on a character,
+                    which keeps only the one thing a character offers: a readable name.
+                  -->
+                  <Grid.ContextMenu>
+                    <ContextMenu Opening="OnTreeMenuOpening">
+                      <MenuItem Header="{DynamicResource Book.Copy}" InputGesture="Ctrl+C" Tag="book"
+                                Click="OnCopyBook" />
+                      <MenuItem Header="{DynamicResource Book.Paste}" InputGesture="Ctrl+V" Tag="paste"
+                                Click="OnPasteBook" />
+                      <Separator Tag="book" />
+                      <MenuItem Header="{DynamicResource Book.Rename}" Tag="book" Click="OnRenameNode" />
+                      <MenuItem Header="{DynamicResource Character.Rename}" Tag="character" Click="OnRenameNode" />
+                      <!-- Deletes files on disk, so it asks first, like a copy. -->
+                      <MenuItem Header="{DynamicResource Book.Clear}" Tag="book" Click="OnClearBook" />
+                    </ContextMenu>
+                  </Grid.ContextMenu>
+                  <!--
+                    The book the game itself recorded this character on, from mcr.sys. A bar in the
+                    margin, so it reads without adding a word to the row.
+                  -->
+                  <Rectangle Grid.Column="0" Width="3" RadiusX="1.5" RadiusY="1.5"
+                             Fill="{DynamicResource Accent}" HorizontalAlignment="Left"
+                             Margin="0,1" IsVisible="{Binding IsOpenInGame}" />
+
+                  <Border Grid.Column="1" Classes="rowBadge" Background="{Binding BadgeBackground}">
                     <TextBlock Text="{Binding Badge}" Foreground="{Binding BadgeForeground}" />
                   </Border>
-                  <TextBlock Grid.Column="1" Text="{Binding Header}" FontSize="12.5" Margin="9,0,0,0"
+                  <TextBlock Grid.Column="2" Text="{Binding Header}" FontSize="12.5" Margin="9,0,0,0"
                              FontWeight="{Binding HeaderWeight}"
-                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2" Text="{Binding Trailing}" Classes="counter"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                             IsVisible="{Binding !IsRenaming}" />
+
+                  <!--
+                    Renaming happens in the row itself: the title is a book's own, and typing it
+                    where you read it beats a dialog. Enter writes it, Escape drops it.
+                  -->
+                  <TextBox Grid.Column="2" Text="{Binding RenameDraft}" IsVisible="{Binding IsRenaming}"
+                           Margin="9,0,0,0" FontSize="12.5" Padding="4,1" MinHeight="0"
+                           AttachedToVisualTree="OnRenameBoxShown"
+                           KeyDown="OnRenameKey" LostFocus="OnRenameCommitted" />
+                  <TextBlock Grid.Column="3" Text="{Binding Trailing}" Classes="counter"
                              Margin="8,0,0,0" ToolTip.Tip="{DynamicResource Books.SetsUsed.Tip}" />
-                  <Ellipse Grid.Column="3" Width="6" Height="6" Fill="{DynamicResource Warn}"
+                  <Ellipse Grid.Column="4" Width="6" Height="6" Fill="{DynamicResource Warn}"
                            VerticalAlignment="Center" Margin="7,0,2,0"
                            IsVisible="{Binding IsDirty}" ToolTip.Tip="{DynamicResource Books.Dirty.Tip}" />
                 </Grid>
@@ -200,6 +241,16 @@
                               Width="56"
                               Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).SelectSetCommand}"
                               CommandParameter="{Binding}" ToolTip.Tip="{Binding Detail}">
+                        <Button.ContextMenu>
+                          <ContextMenu Opening="OnSetMenuOpening">
+                            <MenuItem Header="{DynamicResource Set.Copy}" InputGesture="Ctrl+C" Click="OnCopySet" />
+                            <MenuItem Header="{DynamicResource Set.Paste}" InputGesture="Ctrl+V" Tag="paste"
+                                      Click="OnPasteSet" />
+                            <Separator />
+                            <!-- In memory, like every other edit: « Reload » puts the macros back. -->
+                            <MenuItem Header="{DynamicResource Set.Clear}" Click="OnClearSet" />
+                          </ContextMenu>
+                        </Button.ContextMenu>
                         <Grid ColumnDefinitions="*,Auto">
                           <TextBlock Grid.Column="0" Text="{Binding Header}" FontSize="11.5"
                                      HorizontalAlignment="Center" Opacity="{Binding TabOpacity}" />
@@ -241,9 +292,10 @@
                               CommandParameter="{Binding}" ToolTip.Tip="{Binding Preview}"
                               DragDrop.AllowDrop="True">
                         <Button.ContextMenu>
-                          <ContextMenu>
-                            <MenuItem Header="{DynamicResource Editor.Copy}" Click="OnCopyMacro" />
-                            <MenuItem Header="{DynamicResource Editor.Paste}" Click="OnPasteMacro" />
+                          <ContextMenu Opening="OnMacroMenuOpening">
+                            <MenuItem Header="{DynamicResource Editor.Copy}" InputGesture="Ctrl+C" Click="OnCopyMacro" />
+                            <MenuItem Header="{DynamicResource Editor.Paste}" InputGesture="Ctrl+V" Tag="paste"
+                                      Click="OnPasteMacro" />
                             <Separator />
                             <MenuItem Header="{DynamicResource Editor.Clear}" Command="{Binding ClearCommand}" />
                           </ContextMenu>

@@ -33,8 +33,6 @@ internal static class Strings
 
         // ---------------------------------------------------------------- books panel
         ["Books.Title"] = "BOOKS",
-        ["Books.ShowEmpty"] = "empty",
-        ["Books.ShowEmpty.Tip"] = "Show all 40 books, including the ones with no macro",
         ["Books.ChooseFolder"] = "USER folder…",
         ["Books.Refresh"] = "Refresh",
         ["Books.Dirty.Tip"] = "Unsaved changes",
@@ -57,12 +55,21 @@ internal static class Strings
         ["Set.Title"] = "{0}   ·   Book {1} “{2}”   ·   Set {3}/10",
         ["Set.PickBook"] = "Pick a book from the list on the left.",
         ["Set.Wheel.Tip"] = "The order the game's up and down arrows walk. Ctrl+PageUp / Ctrl+PageDown.",
+        ["Set.Copy"] = "Copy this set",
+        ["Set.Paste"] = "Paste a set here",
+        ["Set.Clear"] = "Empty this set",
 
         // ---------------------------------------------------------------- macro editor
         ["Editor.Clear"] = "Clear",
         ["Editor.NameWatermark"] = "Name (8 characters)",
-        ["Editor.Copy"] = "Copy",
-        ["Editor.Paste"] = "Paste",
+        ["Editor.Copy"] = "Copy this macro",
+        ["Editor.Paste"] = "Paste a macro here",
+
+        // ---------------------------------------------------------------- the editor's own clipboard
+        ["Clipboard.Empty"] = "Clipboard: empty",
+        ["Clipboard.Macro"] = "Clipboard: macro “{0}”",
+        ["Clipboard.Set"] = "Clipboard: set {0} of book {1}",
+        ["Clipboard.Book"] = "Clipboard: book {0} “{1}”",
 
         // ---------------------------------------------------------------- search panel
         ["Search.Title"] = "SEARCH",
@@ -89,8 +96,8 @@ internal static class Strings
         ["Phrases.Many"] = "{0} phrases",
 
         // ---------------------------------------------------------------- notices
-        ["Notice.RecheckGame"] = "Refresh game state",
         ["Notice.Confirm"] = "Confirm",
+        ["Notice.SaveAndConfirm"] = "Save everything and continue",
         ["Notice.Cancel"] = "Cancel",
 
         // ---------------------------------------------------------------- the library tree
@@ -102,6 +109,9 @@ internal static class Strings
         ["Tree.SetMany"] = "{0} sets",
         ["Tree.BookOne"] = "1 book",
         ["Tree.BookMany"] = "{0} books",
+        ["Tree.OpenInGame"] = "where the game left this character, from its own mcr.sys",
+        ["Tree.OpenInGameLive"] = "the book open in game, reported by Windower",
+        ["Tree.OpenInGameMemory"] = "the book open in game, read from the client itself",
         ["Tree.CharacterDetail"] = "{0}, {1}",
         ["Tree.Skipped"] = "{0} file(s) skipped",
 
@@ -118,11 +128,33 @@ internal static class Strings
         ["Status.SavedBlocked"] = "{0} set(s) saved. {1} blocked: fix the fields marked in red.",
         ["Status.SavedAll"] = "{0} set(s) saved.",
         ["Status.Reloaded"] = "{0} reloaded from disk.",
+        ["Status.RewrittenByGame"] = "{0} was rewritten by the game; reloaded from disk.",
+        ["Status.ClientUnreadable"] =
+            "Windows will not let the editor read {0}: that client runs with more privileges than "
+            + "this window. Right-click the editor and « Run as administrator » to see the book it "
+            + "has open — everything else works without it.",
         ["Status.SettingsNotSaved"] = "Settings not saved: {0}",
         ["Status.Copied"] = "{0} copied.",
         ["Status.Pasted"] = "Pasted onto {0}.",
         ["Status.CopiedOnto"] = "{0} copied onto {1}.",
         ["Status.Swapped"] = "{0} and {1} swapped.",
+        ["Status.NothingToPaste"] = "Nothing to paste: copy a macro, a set or a book first (Ctrl+C).",
+        ["Status.SetCopied"] = "Set {0} of book {1} copied — its 20 macros.",
+        ["Status.SetPasted"] = "Set {0} of book {1} replaced. Save to apply.",
+        ["Status.SetCleared"] = "Set {0} of book {1} emptied. Save to apply, or reload to bring it back.",
+        ["Status.SetAlreadyEmpty"] = "Set {0} of book {1} is already empty.",
+        ["Status.BookRenamed"] = "Book {0} is now “{1}”.",
+        ["Status.CharacterRenamed"] =
+            "{0} is shown as “{1}” from now on. That is a label kept by the editor — the folder on "
+            + "disk keeps its own name, which is the one the game looks for.",
+        ["Status.CharacterUnnamed"] = "{0} goes back to being shown by its folder name.",
+        ["Status.LiveUnmatched"] =
+            "Windower reports {0} in game on book {1}, but no character here is labelled {0}. "
+            + "Select that character in the list, press F2 and type {0}. Nothing is renamed on disk: "
+            + "the game finds a character by its folder name, and that must not change.",
+        ["Status.BookCleared"] = "Book {0} emptied: its set files are gone and its title is reset.",
+        ["Status.NothingToClear"] = "Book {0} is already empty.",
+        ["Status.BookOnClipboard"] = "Book {0} “{1}” copied. Paste it onto another book to replace it.",
         ["Status.NothingToRepair"] = "{0}: nothing to repair.",
         ["Status.RepairedOne"] = "1 field repaired ({0}). Save to apply.",
         ["Status.RepairedMany"] = "{0} fields repaired (including {1}). Save to apply.",
@@ -131,7 +163,6 @@ internal static class Strings
         ["Status.ImportedOne"] = "One set imported from {0}. Save to apply.",
         ["Status.Imported"] = "{1} sets imported from {0}. Save to apply.",
         ["Status.Cancelled"] = "Operation cancelled.",
-        ["Status.SaveBeforeMove"] = "{0}: save before moving a book.",
         ["Status.BookMoved"] = "Book {0} moved onto book {1}.",
         ["Status.BookCopied"] = "Book {0} copied onto book {1}.",
         ["Status.LanguageChanged"] = "Interface language: English.",
@@ -143,15 +174,30 @@ internal static class Strings
             + "overwritten if you save it. Every other book is read from disk the moment you switch "
             + "to it, so you can edit those freely — the change takes effect as soon as you change "
             + "book or job.",
+        ["Game.InGame"] = "In game: {0}",
         ["Game.NobodyConnected"] = "Nobody is in game: you can save.",
-        ["Game.SaveAdvice"] = " Switch to book {0} in game to see it — if you are already there, change book and come back.",
+        ["Game.SaveAdvice"] = " Switch to book {0} in game to see it.",
 
         // ---------------------------------------------------------------- moving a book
+        ["Book.Copy"] = "Copy this book",
+        ["Book.Paste"] = "Paste a book here",
+        ["Book.Rename"] = "Rename this book (F2)",
+        ["Character.Rename"] = "Label this character in the editor (F2)",
+        ["Tree.NotHexFolder"] =
+            "the game will not find this folder: it looks a character up by the hexadecimal name it "
+            + "gave the folder, so a renamed one is invisible to it",
+        ["Book.Clear"] = "Empty this book",
+        ["Book.ClearQuestion"] =
+            "Empty book {0} “{1}” of {2}? Its {3} set file(s) will be deleted and its title reset. "
+            + "Nothing is kept in the editor — only the backup can bring it back.",
         ["Book.MoveQuestion"] = "Move book {0} “{1}” from {2} onto book {3} “{4}” of {5}? ",
         ["Book.CopyQuestion"] = "Copy book {0} “{1}” from {2} onto book {3} “{4}” of {5}? ",
         ["Book.Overwrites"] = "{0} set(s) of the destination book will be overwritten",
         ["Book.SourceEmptied"] = ", and the source book will be emptied.",
         ["Book.End"] = ".",
+        ["Book.NeedsSave"] =
+            " First: {0} set(s) hold unsaved edits. Copying a book re-reads every file from disk, "
+            + "which would throw them away — so they are saved on the way through.",
     };
 
     public static readonly IReadOnlyDictionary<string, string> French = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -165,8 +211,6 @@ internal static class Strings
 
         // ---------------------------------------------------------------- panneau des books
         ["Books.Title"] = "BOOKS",
-        ["Books.ShowEmpty"] = "vides",
-        ["Books.ShowEmpty.Tip"] = "Afficher les 40 books, même ceux sans macro",
         ["Books.ChooseFolder"] = "Dossier USER…",
         ["Books.Refresh"] = "Actualiser",
         ["Books.Dirty.Tip"] = "Modifications non enregistrées",
@@ -189,12 +233,21 @@ internal static class Strings
         ["Set.Title"] = "{0}   ·   Book {1} « {2} »   ·   Set {3}/10",
         ["Set.PickBook"] = "Choisis un book dans la liste de gauche.",
         ["Set.Wheel.Tip"] = "Ordre des flèches haut/bas du jeu. Ctrl+PagePréc / Ctrl+PageSuiv.",
+        ["Set.Copy"] = "Copier ce set",
+        ["Set.Paste"] = "Coller un set ici",
+        ["Set.Clear"] = "Vider ce set",
 
         // ---------------------------------------------------------------- éditeur de macro
         ["Editor.Clear"] = "Vider",
         ["Editor.NameWatermark"] = "Nom (8 caractères)",
-        ["Editor.Copy"] = "Copier",
-        ["Editor.Paste"] = "Coller",
+        ["Editor.Copy"] = "Copier cette macro",
+        ["Editor.Paste"] = "Coller une macro ici",
+
+        // ---------------------------------------------------------------- presse-papier de l'éditeur
+        ["Clipboard.Empty"] = "Presse-papier : vide",
+        ["Clipboard.Macro"] = "Presse-papier : macro « {0} »",
+        ["Clipboard.Set"] = "Presse-papier : set {0} du book {1}",
+        ["Clipboard.Book"] = "Presse-papier : book {0} « {1} »",
 
         // ---------------------------------------------------------------- panneau de recherche
         ["Search.Title"] = "RECHERCHE",
@@ -221,8 +274,8 @@ internal static class Strings
         ["Phrases.Many"] = "{0} phrases",
 
         // ---------------------------------------------------------------- bandeaux
-        ["Notice.RecheckGame"] = "Actualiser l'état du jeu",
         ["Notice.Confirm"] = "Confirmer",
+        ["Notice.SaveAndConfirm"] = "Tout enregistrer et continuer",
         ["Notice.Cancel"] = "Annuler",
 
         // ---------------------------------------------------------------- arbre de la bibliothèque
@@ -234,6 +287,9 @@ internal static class Strings
         ["Tree.SetMany"] = "{0} sets",
         ["Tree.BookOne"] = "1 book",
         ["Tree.BookMany"] = "{0} books",
+        ["Tree.OpenInGame"] = "là où le jeu a laissé ce personnage, d'après son propre mcr.sys",
+        ["Tree.OpenInGameLive"] = "le book ouvert en jeu, rapporté par Windower",
+        ["Tree.OpenInGameMemory"] = "le book ouvert en jeu, lu dans le client lui-même",
         ["Tree.CharacterDetail"] = "{0}, {1}",
         ["Tree.Skipped"] = "{0} fichier(s) ignoré(s)",
 
@@ -250,11 +306,33 @@ internal static class Strings
         ["Status.SavedBlocked"] = "{0} set(s) enregistré(s). {1} bloqué(s) : corrige les champs en rouge.",
         ["Status.SavedAll"] = "{0} set(s) enregistré(s).",
         ["Status.Reloaded"] = "{0} rechargé depuis le disque.",
+        ["Status.RewrittenByGame"] = "{0} a été réécrit par le jeu ; rechargé depuis le disque.",
+        ["Status.ClientUnreadable"] =
+            "Windows interdit à l'éditeur de lire {0} : ce client tourne avec plus de droits que cette "
+            + "fenêtre. Clic droit sur l'éditeur puis « Exécuter en tant qu'administrateur » pour voir "
+            + "le book ouvert — tout le reste fonctionne sans ça.",
         ["Status.SettingsNotSaved"] = "Réglages non enregistrés : {0}",
         ["Status.Copied"] = "{0} copié.",
         ["Status.Pasted"] = "Collé sur {0}.",
         ["Status.CopiedOnto"] = "{0} copié sur {1}.",
         ["Status.Swapped"] = "{0} et {1} échangés.",
+        ["Status.NothingToPaste"] = "Rien à coller : copie d'abord une macro, un set ou un book (Ctrl+C).",
+        ["Status.SetCopied"] = "Set {0} du book {1} copié — ses 20 macros.",
+        ["Status.SetPasted"] = "Set {0} du book {1} remplacé. Enregistre pour appliquer.",
+        ["Status.SetCleared"] = "Set {0} du book {1} vidé. Enregistre pour appliquer, ou recharge pour le récupérer.",
+        ["Status.SetAlreadyEmpty"] = "Le set {0} du book {1} est déjà vide.",
+        ["Status.BookRenamed"] = "Le book {0} s'appelle maintenant « {1} ».",
+        ["Status.CharacterRenamed"] =
+            "{0} s'affiche désormais « {1} ». C'est une étiquette tenue par l'éditeur — le dossier sur "
+            + "le disque garde son nom, et c'est celui-là que le jeu va chercher.",
+        ["Status.CharacterUnnamed"] = "{0} s'affiche de nouveau sous le nom de son dossier.",
+        ["Status.LiveUnmatched"] =
+            "Windower signale {0} en jeu sur le book {1}, mais aucun personnage n'est étiqueté {0} ici. "
+            + "Sélectionne ce personnage dans la liste, fais F2 et tape {0}. Rien n'est renommé sur le "
+            + "disque : le jeu retrouve un personnage par le nom de son dossier, il ne doit pas changer.",
+        ["Status.BookCleared"] = "Book {0} vidé : ses fichiers de set sont supprimés et son titre réinitialisé.",
+        ["Status.NothingToClear"] = "Le book {0} est déjà vide.",
+        ["Status.BookOnClipboard"] = "Book {0} « {1} » copié. Colle-le sur un autre book pour le remplacer.",
         ["Status.NothingToRepair"] = "{0} : rien à réparer.",
         ["Status.RepairedOne"] = "1 champ réparé ({0}). Enregistre pour appliquer.",
         ["Status.RepairedMany"] = "{0} champs réparés (dont {1}). Enregistre pour appliquer.",
@@ -263,7 +341,6 @@ internal static class Strings
         ["Status.ImportedOne"] = "Un set importé depuis {0}. Enregistre pour appliquer.",
         ["Status.Imported"] = "{1} sets importés depuis {0}. Enregistre pour appliquer.",
         ["Status.Cancelled"] = "Opération annulée.",
-        ["Status.SaveBeforeMove"] = "{0} : enregistre avant de déplacer un book.",
         ["Status.BookMoved"] = "Book {0} déplacé vers le book {1}.",
         ["Status.BookCopied"] = "Book {0} copié vers le book {1}.",
         ["Status.LanguageChanged"] = "Langue de l'interface : français.",
@@ -275,14 +352,29 @@ internal static class Strings
             + "sera écrasé si tu l'enregistres. Tous les autres books se lisent sur le disque au "
             + "moment où tu bascules dessus, donc tu peux les modifier librement — la modification "
             + "sera active dès le changement de book ou de job.",
+        ["Game.InGame"] = "En jeu : {0}",
         ["Game.NobodyConnected"] = "Personne n'est connecté en jeu : tu peux enregistrer.",
-        ["Game.SaveAdvice"] = " Bascule sur le book {0} en jeu pour le voir — si tu y es déjà, change de book et reviens.",
+        ["Game.SaveAdvice"] = " Bascule sur le book {0} en jeu pour le voir.",
 
         // ---------------------------------------------------------------- déplacer un book
+        ["Book.Copy"] = "Copier ce book",
+        ["Book.Paste"] = "Coller un book ici",
+        ["Book.Rename"] = "Renommer ce book (F2)",
+        ["Character.Rename"] = "Étiqueter ce personnage dans l'éditeur (F2)",
+        ["Tree.NotHexFolder"] =
+            "le jeu ne trouvera pas ce dossier : il cherche un personnage par le nom hexadécimal qu'il "
+            + "lui a donné, un dossier renommé lui est donc invisible",
+        ["Book.Clear"] = "Vider ce book",
+        ["Book.ClearQuestion"] =
+            "Vider le book {0} « {1} » de {2} ? Ses {3} fichier(s) de set seront supprimés et son titre "
+            + "réinitialisé. Rien n'est gardé dans l'éditeur — seule la sauvegarde peut le ramener.",
         ["Book.MoveQuestion"] = "Déplacer le book {0} « {1} » de {2} vers le book {3} « {4} » de {5} ? ",
         ["Book.CopyQuestion"] = "Copier le book {0} « {1} » de {2} vers le book {3} « {4} » de {5} ? ",
         ["Book.Overwrites"] = "{0} set(s) du book de destination seront écrasés",
         ["Book.SourceEmptied"] = ", et le book d'origine sera vidé.",
         ["Book.End"] = ".",
+        ["Book.NeedsSave"] =
+            " Avant ça : {0} set(s) ont des modifications non enregistrées. Copier un book relit tous "
+            + "les fichiers depuis le disque, ce qui les perdrait — elles seront donc enregistrées au passage.",
     };
 }

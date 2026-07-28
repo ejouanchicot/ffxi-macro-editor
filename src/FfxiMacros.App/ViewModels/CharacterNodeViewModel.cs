@@ -10,14 +10,22 @@ namespace FfxiMacros.App.ViewModels;
 public sealed class CharacterNodeViewModel : TreeNodeViewModel
 {
     private readonly List<BookNodeViewModel> _allBooks;
-    private bool _showEmptyBooks;
 
-    internal CharacterNodeViewModel(CharacterFolder character, bool showEmptyBooks)
+    /// <summary>
+    /// Lists all 40 books, always.
+    /// </summary>
+    /// <remarks>
+    /// The empty ones used to be hidden behind a checkbox. A character has forty book slots whether
+    /// or not the game ever wrote a file for one — hiding the empty ones made a book vanish the
+    /// moment it was emptied, and made « put this one on book 12 » a two-step affair.
+    /// </remarks>
+    internal CharacterNodeViewModel(CharacterFolder character)
     {
         Character = character;
-        _showEmptyBooks = showEmptyBooks;
         _allBooks = character.Books.Select(b => new BookNodeViewModel(b, this)).ToList();
-        ApplyBookFilter();
+
+        foreach (var book in _allBooks)
+            Children.Add(book);
     }
 
     public CharacterFolder Character { get; }
@@ -34,6 +42,9 @@ public sealed class CharacterNodeViewModel : TreeNodeViewModel
 
     public override FontWeight HeaderWeight => FontWeight.SemiBold;
 
+    /// <summary>A folder named after a number is worth renaming; it is also what links a live report.</summary>
+    public override bool CanRename => true;
+
     public override string Detail
     {
         get
@@ -42,22 +53,17 @@ public sealed class CharacterNodeViewModel : TreeNodeViewModel
                 Character.BookCount == 1 ? Loc.T("Tree.BookOne") : Loc.T("Tree.BookMany", Character.BookCount),
                 Character.SetFileCount == 1 ? Loc.T("Tree.SetOne") : Loc.T("Tree.SetMany", Character.SetFileCount));
 
-            return Character.SkippedFiles.Count == 0
-                ? counts
-                : $"{counts} · {Loc.T("Tree.Skipped", Character.SkippedFiles.Count)}";
+            if (Character.SkippedFiles.Count > 0)
+                counts = $"{counts} · {Loc.T("Tree.Skipped", Character.SkippedFiles.Count)}";
+
+            // A folder renamed to something readable is invisible to the game, which then starts
+            // the character again from empty macros. Worth saying out loud, right on the row.
+            return Character.HasHexId ? counts : $"{counts} · {Loc.T("Tree.NotHexFolder")}";
         }
     }
 
-    /// <summary>When false, books with no set file and no title are hidden to keep the tree short.</summary>
-    public bool ShowEmptyBooks
-    {
-        get => _showEmptyBooks;
-        set
-        {
-            if (SetField(ref _showEmptyBooks, value))
-                ApplyBookFilter();
-        }
-    }
+    /// <summary>True when the folder name is not the hexadecimal one the game gave it.</summary>
+    public bool IsUnreachableByGame => !Character.HasHexId;
 
     /// <summary>Sets a readable name for the folder; persisting it is the caller's job.</summary>
     public void Rename(string? displayName)
@@ -66,14 +72,4 @@ public sealed class CharacterNodeViewModel : TreeNodeViewModel
         RefreshLabels();
     }
 
-    private void ApplyBookFilter()
-    {
-        var wanted = _showEmptyBooks
-            ? _allBooks
-            : _allBooks.Where(b => !b.IsEmptyAndUntitled).ToList();
-
-        Children.Clear();
-        foreach (var book in wanted)
-            Children.Add(book);
-    }
 }

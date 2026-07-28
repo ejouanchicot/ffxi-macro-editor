@@ -19,26 +19,69 @@ public sealed class SearchHitViewModel(MacroSearchHit hit)
     public string Text => Hit.Text;
 }
 
-/// <summary>What a pending book copy or move would do, waiting for the user to confirm it.</summary>
-public sealed class PendingBookOperation(BookNodeViewModel source, BookNodeViewModel target, bool move)
+/// <summary>What the editor's own clipboard is holding.</summary>
+public enum ClipboardKind
 {
+    None,
+    Macro,
+    Set,
+    Book,
+}
+
+/// <summary>The three things that can be done to a whole book, all of them writing to disk.</summary>
+public enum BookOperationKind
+{
+    Copy,
+    Move,
+    Clear,
+}
+
+/// <summary>What a pending book operation would do, waiting for the user to confirm it.</summary>
+public sealed class PendingBookOperation(
+    BookOperationKind kind, BookNodeViewModel source, BookNodeViewModel? target, int unsavedSets)
+{
+    public BookOperationKind Kind { get; } = kind;
+
+    /// <summary>The book being copied, moved or emptied.</summary>
     public BookNodeViewModel Source { get; } = source;
 
-    public BookNodeViewModel Target { get; } = target;
+    /// <summary>Where it goes — null when the book is simply being emptied.</summary>
+    public BookNodeViewModel? Target { get; } = target;
 
-    public bool Move { get; } = move;
+    public bool Move => Kind == BookOperationKind.Move;
 
-    public string Question =>
-        Loc.T(Move ? "Book.MoveQuestion" : "Book.CopyQuestion",
-              Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label,
-              Target.Info.Number, Target.Info.Title, Target.Parent.Character.Label)
-        + Loc.T("Book.Overwrites", Target.Info.SetCount)
-        + Loc.T(Move ? "Book.SourceEmptied" : "Book.End");
+    /// <summary>
+    /// Sets holding edits when the operation was asked for.
+    /// </summary>
+    /// <remarks>
+    /// A book is copied on disk and the whole folder is re-read afterwards, which throws away every
+    /// unsaved edit — anywhere, not only in the two books concerned. So the operation waits instead
+    /// of refusing: the banner offers to save everything and carry on, which is what the user meant.
+    /// </remarks>
+    public int UnsavedSets { get; } = unsavedSets;
+
+    public bool NeedsSave => UnsavedSets > 0;
+
+    public string Question => Transfer + (NeedsSave ? Loc.T("Book.NeedsSave", UnsavedSets) : "");
+
+    private string Transfer =>
+        Kind == BookOperationKind.Clear || Target is not { } target
+            ? Loc.T("Book.ClearQuestion",
+                    Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label, Source.Info.SetCount)
+            : Loc.T(Move ? "Book.MoveQuestion" : "Book.CopyQuestion",
+                    Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label,
+                    target.Info.Number, target.Info.Title, target.Parent.Character.Label)
+              + Loc.T("Book.Overwrites", target.Info.SetCount)
+              + Loc.T(Move ? "Book.SourceEmptied" : "Book.End");
 }
 
 public sealed partial class MainWindowViewModel
 {
     private Macro? _macroClipboard;
+    private MacroBook? _setClipboard;
+    private (int Book, int Set) _setClipboardOrigin;
+    private BookNodeViewModel? _bookClipboard;
+    private ClipboardKind _clipboardKind;
     private string _searchQuery = "";
     private SearchHitViewModel? _selectedSearchResult;
     private PendingBookOperation? _pendingBookOperation;
@@ -64,7 +107,19 @@ public sealed partial class MainWindowViewModel
     public bool IsGameRunning => _runningClients.Count > 0;
 
     /// <summary>
-    /// Warning shown while a client might still own the macro files.
+    /// Who is in game, in three words, for the corner of the status bar.
+    /// </summary>
+    /// <remarks>
+    /// This used to be a banner across the top of the window. It said something true and useful —
+    /// once. Read for the twentieth time in a session it is noise, and it pushed the editor down the
+    /// screen every time a client was running, so it is now a line in the status bar carrying the
+    /// long version as its tooltip.
+    /// </remarks>
+    public string GameStatusSummary =>
+        IsGameRunning ? Loc.T("Game.InGame", string.Join(", ", _runningClients)) : "";
+
+    /// <summary>
+    /// What being in game actually costs you, kept for the tooltip.
     /// </summary>
     /// <remarks>
     /// Measured on a live install: logging out to the character-select screen makes the client flush
@@ -78,7 +133,7 @@ public sealed partial class MainWindowViewModel
         _recheckGameCommand ??= new RelayCommand(() =>
         {
             RefreshGameState();
-            SetStatus(IsGameRunning ? GameRunningWarning : Loc.T("Game.NobodyConnected"), IsGameRunning);
+            SetStatus(IsGameRunning ? GameStatusSummary : Loc.T("Game.NobodyConnected"));
         });
 
     /// <summary>Re-reads which clients are running, and forgets any override once they are gone.</summary>
@@ -86,11 +141,9 @@ public sealed partial class MainWindowViewModel
     {
         _runningClients = ProbeRunningClients();
         OnPropertyChanged(nameof(IsGameRunning));
+        OnPropertyChanged(nameof(GameStatusSummary));
         OnPropertyChanged(nameof(GameRunningWarning));
-        OnPropertyChanged(nameof(ShowGameRunningBanner));
     }
-
-    public bool ShowGameRunningBanner => IsGameRunning;
 
     /// <summary>
     /// Always allows the write, and reports what the player has to do for it to take effect.
@@ -110,13 +163,69 @@ public sealed partial class MainWindowViewModel
     private string SaveAdvice(SetNodeViewModel set) =>
         IsGameRunning ? Loc.T("Game.SaveAdvice", set.Info.BookNumber) : "";
 
-    // ---------------------------------------------------------------- macro clipboard
+    // ---------------------------------------------------------------- the editor's clipboard
+
+    /// <summary>
+    /// One clipboard per kind, rather than a single slot the three of them share.
+    /// </summary>
+    /// <remarks>
+    /// Copying a book and then a macro would otherwise throw the book away, and a Ctrl+V landing on
+    /// a set tab has to know whether there is a <em>set</em> to paste — not merely something. What
+    /// is pasted is decided by what the pointer or the focus is on, so each kind keeps its own slot
+    /// and they never overwrite each other.
+    /// </remarks>
+    public ClipboardKind Clipboard => _clipboardKind;
 
     public bool CanPasteMacro => _macroClipboard is not null;
 
-    /// <summary>Name of the macro on the clipboard, for the menu label.</summary>
-    public string ClipboardSummary =>
-        _macroClipboard is null ? "" : $"presse-papier : {(_macroClipboard.IsEmpty ? "(vide)" : _macroClipboard.Name)}";
+    public bool CanPasteSet => _setClipboard is not null;
+
+    public bool CanPasteBook => _bookClipboard is not null;
+
+    /// <summary>What was copied last, shown in the status bar so the clipboard is never a guess.</summary>
+    public string ClipboardSummary => _clipboardKind switch
+    {
+        ClipboardKind.Macro => Loc.T("Clipboard.Macro", NameOf(_macroClipboard!)),
+        ClipboardKind.Set => Loc.T("Clipboard.Set", _setClipboardOrigin.Set, _setClipboardOrigin.Book),
+        ClipboardKind.Book => Loc.T("Clipboard.Book", _bookClipboard!.Info.Number, _bookClipboard.Info.Title),
+        _ => Loc.T("Clipboard.Empty"),
+    };
+
+    /// <summary>Ctrl+C and every « Copy » entry: what travels depends on what was clicked.</summary>
+    public void CopyToClipboard(object? node)
+    {
+        switch (node)
+        {
+            case MacroSlotViewModel slot:
+                CopyMacroToClipboard(slot);
+                break;
+            case SetNodeViewModel set:
+                CopySetToClipboard(set);
+                break;
+            case BookNodeViewModel book:
+                CopyBookToClipboard(book);
+                break;
+        }
+    }
+
+    /// <summary>Ctrl+V and every « Paste » entry: the target decides which clipboard is read.</summary>
+    public void PasteFromClipboard(object? node)
+    {
+        switch (node)
+        {
+            case MacroSlotViewModel slot:
+                PasteMacroFromClipboard(slot);
+                break;
+            case SetNodeViewModel set:
+                PasteSetFromClipboard(set);
+                break;
+            case BookNodeViewModel book:
+                PasteBookFromClipboard(book);
+                break;
+        }
+    }
+
+    // ---------------------------------------------------------------- one macro
 
     public void CopyMacroToClipboard(MacroSlotViewModel? slot)
     {
@@ -124,22 +233,173 @@ public sealed partial class MainWindowViewModel
             return;
 
         _macroClipboard = slot.Macro.Clone();
-        OnPropertyChanged(nameof(CanPasteMacro));
-        OnPropertyChanged(nameof(ClipboardSummary));
-        SetStatus($"{slot.SlotLabel} copié.");
+        ClipboardChanged(ClipboardKind.Macro);
+        SetStatus(Loc.T("Status.Copied", slot.SlotLabel));
     }
 
     public void PasteMacroFromClipboard(MacroSlotViewModel? slot)
     {
-        if (slot is null || _macroClipboard is null)
+        if (slot is null)
             return;
+
+        if (_macroClipboard is null)
+        {
+            SetStatus(Loc.T("Status.NothingToPaste"), error: true);
+            return;
+        }
 
         MacroOperations.CopyMacro(_macroClipboard, slot.Macro);
         slot.NotifyMacroReplaced();
         slot.OnLineEdited();
         SelectedMacro = slot;
-        SetStatus($"Collé sur {slot.SlotLabel}.");
+        SetStatus(Loc.T("Status.Pasted", slot.SlotLabel));
     }
+
+    // ---------------------------------------------------------------- a whole set
+
+    /// <summary>Takes a copy of the 20 macros of a set, loading it first if it was never opened.</summary>
+    public void CopySetToClipboard(SetNodeViewModel? set)
+    {
+        if (set is null || !TryLoad(set))
+            return;
+
+        _setClipboard = set.Loaded!.Clone();
+        _setClipboardOrigin = (set.Info.BookNumber, set.Info.SetNumber);
+        ClipboardChanged(ClipboardKind.Set);
+        SetStatus(Loc.T("Status.SetCopied", set.Info.SetNumber, set.Info.BookNumber));
+    }
+
+    /// <summary>
+    /// Replaces the 20 macros of a set with the ones on the clipboard, in memory: nothing reaches
+    /// the disk until the set is saved, so a paste onto the wrong set is undone by « Reload ».
+    /// </summary>
+    public void PasteSetFromClipboard(SetNodeViewModel? set)
+    {
+        if (set is null)
+            return;
+
+        if (_setClipboard is null)
+        {
+            SetStatus(Loc.T("Status.NothingToPaste"), error: true);
+            return;
+        }
+
+        if (!TryLoad(set) || set.Loaded is not { } destination)
+            return;
+
+        // The macros travel; the file's version stamp does not. It belongs to the install that
+        // wrote the target, and copying one in from another character would be a lie about the file.
+        for (int index = 0; index < MacroBook.MacroCount; index++)
+            destination.Macros[index] = _setClipboard.Macros[index].Clone();
+
+        foreach (var slot in set.Macros)
+            slot.NotifyMacroReplaced();
+
+        set.MarkDirty();
+
+        if (ReferenceEquals(set, _currentSet))
+            SelectedMacro = set.Macros.FirstOrDefault(m => !m.IsEmpty) ?? set.Macros.FirstOrDefault();
+
+        SetStatus(Loc.T("Status.SetPasted", set.Info.SetNumber, set.Info.BookNumber));
+    }
+
+    /// <summary>
+    /// Empties the 20 macros of a set, in memory. « Reload » brings them back for as long as the
+    /// set has not been saved — unlike emptying a book, which deletes files straight away.
+    /// </summary>
+    public void ClearSet(SetNodeViewModel? set)
+    {
+        if (set is null || !TryLoad(set) || set.Loaded is not { } loaded)
+            return;
+
+        if (loaded.IsEmpty)
+        {
+            SetStatus(Loc.T("Status.SetAlreadyEmpty", set.Info.SetNumber, set.Info.BookNumber));
+            return;
+        }
+
+        foreach (var macro in loaded.Macros)
+            macro.Clear();
+
+        foreach (var slot in set.Macros)
+            slot.NotifyMacroReplaced();
+
+        set.MarkDirty();
+        SetStatus(Loc.T("Status.SetCleared", set.Info.SetNumber, set.Info.BookNumber));
+    }
+
+    // ---------------------------------------------------------------- a whole book
+
+    /// <summary>
+    /// Puts a book on the clipboard. The node is remembered rather than its ten files read: a book
+    /// is copied on disk, file by file, at the moment the paste is confirmed.
+    /// </summary>
+    public void CopyBookToClipboard(BookNodeViewModel? book)
+    {
+        if (book is null)
+            return;
+
+        _bookClipboard = book;
+        ClipboardChanged(ClipboardKind.Book);
+        SetStatus(Loc.T("Status.BookOnClipboard", book.Info.Number, book.Info.Title));
+    }
+
+    /// <summary>Proposes the copy; ten files are overwritten, so it still goes through the confirmation.</summary>
+    public void PasteBookFromClipboard(BookNodeViewModel? target)
+    {
+        if (target is null)
+            return;
+
+        if (_bookClipboard is null)
+        {
+            SetStatus(Loc.T("Status.NothingToPaste"), error: true);
+            return;
+        }
+
+        RequestBookTransfer(LiveBook(_bookClipboard), target, move: false);
+    }
+
+    /// <summary>
+    /// The node standing for the same book in the tree as it is now. A book copy re-reads the whole
+    /// folder, which builds new nodes — so the one on the clipboard would otherwise be a leftover of
+    /// the tree as it was, and pasting the same book twice would work off stale file information.
+    /// </summary>
+    private BookNodeViewModel LiveBook(BookNodeViewModel book) =>
+        Characters.OfType<CharacterNodeViewModel>()
+            .FirstOrDefault(c => string.Equals(c.Character.Id, book.Parent.Character.Id, StringComparison.OrdinalIgnoreCase))
+            ?.Books.FirstOrDefault(b => b.Info.Number == book.Info.Number)
+        ?? book;
+
+    /// <summary>Opens a set that was never read, reporting a file that refuses to load.</summary>
+    private bool TryLoad(SetNodeViewModel set)
+    {
+        try
+        {
+            if (!set.IsLoaded)
+                set.Load();
+
+            return set.IsLoaded;
+        }
+        catch (MacroFileException ex)
+        {
+            SetStatus(ex.ToString(), error: true);
+            return false;
+        }
+    }
+
+    private void ClipboardChanged(ClipboardKind kind)
+    {
+        _clipboardKind = kind;
+        OnPropertyChanged(nameof(Clipboard));
+        OnPropertyChanged(nameof(CanPasteMacro));
+        OnPropertyChanged(nameof(CanPasteSet));
+        OnPropertyChanged(nameof(CanPasteBook));
+        OnPropertyChanged(nameof(ClipboardSummary));
+    }
+
+    /// <summary>The name the game would show, for the clipboard summary.</summary>
+    private static string NameOf(Macro macro) =>
+        MacroRepair.VisibleInGame(macro.Name) is { Length: > 0 } name ? name : "—";
 
     /// <summary>Drag and drop inside the palette: move by default, copy when asked.</summary>
     public void TransferMacro(MacroSlotViewModel source, MacroSlotViewModel target, bool copy)
@@ -161,8 +421,8 @@ public sealed partial class MainWindowViewModel
         SelectedMacro = target;
 
         SetStatus(copy
-            ? $"{source.SlotLabel} copié sur {target.SlotLabel}."
-            : $"{source.SlotLabel} et {target.SlotLabel} échangés.");
+            ? Loc.T("Status.CopiedOnto", source.SlotLabel, target.SlotLabel)
+            : Loc.T("Status.Swapped", source.SlotLabel, target.SlotLabel));
     }
 
     // ---------------------------------------------------------------- repair
@@ -321,6 +581,117 @@ public sealed partial class MainWindowViewModel
         return applied;
     }
 
+    // ---------------------------------------------------------------- renaming, in the tree
+
+    /// <summary>
+    /// Puts a row into edit mode — a book's title, or the name a character folder goes by.
+    /// </summary>
+    /// <remarks>
+    /// A book's title is the one the game shows on the macro bar, written to <c>mcr.ttl</c>. A
+    /// character's name is the editor's own: the folder is a hexadecimal number that says nothing,
+    /// and naming it is also what lets a Windower report find the character it belongs to.
+    /// </remarks>
+    public void BeginRename(TreeNodeViewModel? node)
+    {
+        if (node is not { CanRename: true })
+            return;
+
+        foreach (var other in Characters.OfType<TreeNodeViewModel>().Concat(
+                     Characters.OfType<CharacterNodeViewModel>().SelectMany(c => c.Books)))
+        {
+            other.IsRenaming = false;
+        }
+
+        node.RenameDraft = node switch
+        {
+            BookNodeViewModel book => book.Info.Title,
+            CharacterNodeViewModel character => character.Character.DisplayName ?? "",
+            _ => "",
+        };
+
+        node.IsRenaming = true;
+    }
+
+    public void CancelRename(TreeNodeViewModel? node)
+    {
+        if (node is not null)
+            node.IsRenaming = false;
+    }
+
+    public void CommitRename(TreeNodeViewModel? node)
+    {
+        switch (node)
+        {
+            case BookNodeViewModel book:
+                CommitRenameBook(book);
+                break;
+            case CharacterNodeViewModel character:
+                CommitRenameCharacter(character);
+                break;
+        }
+    }
+
+    /// <summary>Writes the new title to the character's title file, or says why it does not fit.</summary>
+    private void CommitRenameBook(BookNodeViewModel book)
+    {
+        if (!book.IsRenaming)
+            return;
+
+        string title = book.RenameDraft.Trim();
+        if (title.Length == 0 || string.Equals(title, book.Info.Title, StringComparison.Ordinal))
+        {
+            book.IsRenaming = false;
+            return;
+        }
+
+        try
+        {
+            if (!MayWriteToDisk())
+                return;
+
+            BackupOnce(book.Parent.Character);
+            MacroOperations.RenameBook(book.Info, title, _log);
+            book.IsRenaming = false;
+            book.RefreshUpwards();
+
+            SetStatus(Loc.T("Status.BookRenamed", book.Info.Number, title)
+                      + (IsGameRunning ? Loc.T("Game.SaveAdvice", book.Info.Number) : ""));
+        }
+        catch (MacroFileException ex)
+        {
+            // Left in edit mode on purpose: the text is still there to shorten.
+            SetStatus(ex.Message, error: true);
+        }
+    }
+
+    /// <summary>
+    /// Names a character folder. Nothing is written to the game's files — this lives in the editor's
+    /// settings, and it is how a report from Windower is matched to a folder.
+    /// </summary>
+    private void CommitRenameCharacter(CharacterNodeViewModel character)
+    {
+        if (!character.IsRenaming)
+            return;
+
+        string name = character.RenameDraft.Trim();
+        character.IsRenaming = false;
+
+        if (string.Equals(name, character.Character.DisplayName ?? "", StringComparison.Ordinal))
+            return;
+
+        character.Rename(name);
+        _settings.SetName(character.Character.Id, name);
+        TrySaveSettings();
+
+        // The name is the link to the addon's report, so the marker can appear the moment it is set.
+        foreach (var node in Characters.OfType<CharacterNodeViewModel>())
+            MarkBookOpenInGame(node);
+
+        SetStatus(name.Length == 0
+            ? Loc.T("Status.CharacterUnnamed", character.Character.Id)
+            : Loc.T("Status.CharacterRenamed", character.Character.Id, name));
+    }
+
     // ---------------------------------------------------------------- book copy / move
 
     public PendingBookOperation? PendingBookOperation
@@ -328,8 +699,12 @@ public sealed partial class MainWindowViewModel
         get => _pendingBookOperation;
         private set
         {
-            if (SetField(ref _pendingBookOperation, value))
-                OnPropertyChanged(nameof(HasPendingBookOperation));
+            if (!SetField(ref _pendingBookOperation, value))
+                return;
+
+            OnPropertyChanged(nameof(HasPendingBookOperation));
+            _confirmBookOperationCommand?.RaiseCanExecuteChanged();
+            _saveAllAndConfirmCommand?.RaiseCanExecuteChanged();
         }
     }
 
@@ -337,15 +712,21 @@ public sealed partial class MainWindowViewModel
 
     private RelayCommand? _confirmBookOperationCommand;
     public RelayCommand ConfirmBookOperationCommand =>
-        _confirmBookOperationCommand ??= new RelayCommand(ConfirmBookOperation, () => _pendingBookOperation is not null);
+        _confirmBookOperationCommand ??= new RelayCommand(ConfirmBookOperation, () => _pendingBookOperation is { NeedsSave: false });
+
+    private RelayCommand? _saveAllAndConfirmCommand;
+
+    /// <summary>Saves every pending edit, then carries out the book operation that was waiting on them.</summary>
+    public RelayCommand SaveAllAndConfirmCommand =>
+        _saveAllAndConfirmCommand ??= new RelayCommand(SaveAllThenConfirm, () => _pendingBookOperation is { NeedsSave: true });
 
     private RelayCommand? _cancelBookOperationCommand;
     public RelayCommand CancelBookOperationCommand =>
         _cancelBookOperationCommand ??= new RelayCommand(() => { PendingBookOperation = null; SetStatus(Loc.T("Status.Cancelled")); });
 
     /// <summary>
-    /// A dropped book is never applied straight away: copying a book overwrites ten files, so the
-    /// user is shown exactly what will happen and has to confirm.
+    /// A dropped or pasted book is never applied straight away: copying a book overwrites ten files,
+    /// so the user is shown exactly what will happen and has to confirm.
     /// </summary>
     public void RequestBookTransfer(BookNodeViewModel source, BookNodeViewModel target, bool move)
     {
@@ -355,14 +736,48 @@ public sealed partial class MainWindowViewModel
         if (ReferenceEquals(source, target))
             return;
 
-        if (DirtySets.Any())
+        // Unsaved edits used to turn this into a flat refusal, reported in the status bar — which
+        // reads as « nothing happened » to anyone whose eyes are on the book they just clicked.
+        // The operation is proposed either way; the banner then asks for the save it needs.
+        Propose(new PendingBookOperation(
+            move ? BookOperationKind.Move : BookOperationKind.Copy, source, target, DirtyCount));
+    }
+
+    /// <summary>
+    /// Asks to empty a book: its set files are deleted and its title reset. Nothing an « undo »
+    /// could bring back, so it goes through the same confirmation as a copy.
+    /// </summary>
+    public void RequestBookClear(BookNodeViewModel? book)
+    {
+        if (book is null)
+            return;
+
+        if (book.IsEmptyAndUntitled)
         {
-            SetStatus(Loc.T("Status.SaveBeforeMove", DirtySummary), error: true);
+            SetStatus(Loc.T("Status.NothingToClear", book.Info.Number));
             return;
         }
 
-        PendingBookOperation = new PendingBookOperation(source, target, move);
-        SetStatus(PendingBookOperation.Question);
+        Propose(new PendingBookOperation(BookOperationKind.Clear, book, target: null, DirtyCount));
+    }
+
+    private void Propose(PendingBookOperation operation)
+    {
+        PendingBookOperation = operation;
+        SetStatus(operation.Question, error: operation.NeedsSave);
+    }
+
+    private void SaveAllThenConfirm()
+    {
+        if (_pendingBookOperation is not { } operation)
+            return;
+
+        SaveAll();
+        if (DirtySets.Any())
+            return;   // something refused to save; SaveAll has said which, and the operation waits on
+
+        PendingBookOperation = new PendingBookOperation(operation.Kind, operation.Source, operation.Target, 0);
+        ConfirmBookOperation();
     }
 
     private void ConfirmBookOperation()
@@ -377,18 +792,29 @@ public sealed partial class MainWindowViewModel
 
             if (_settings.BackupBeforeSave)
             {
-                BackupOnce(operation.Target.Parent.Character);
-                if (operation.Move)
+                // Emptying a book deletes files: the backup is the only way back, so it comes first.
+                BackupOnce((operation.Target ?? operation.Source).Parent.Character);
+                if (operation.Move || operation.Kind == BookOperationKind.Clear)
                     BackupOnce(operation.Source.Parent.Character);
             }
 
-            if (operation.Move)
-                MacroOperations.MoveBook(operation.Source.Info, operation.Target.Info, _log);
+            if (operation.Target is not { } target)
+            {
+                MacroOperations.ClearBook(operation.Source.Info, _log);
+                SetStatus(Loc.T("Status.BookCleared", operation.Source.Info.Number));
+            }
             else
-                MacroOperations.CopyBook(operation.Source.Info, operation.Target.Info, keepTargetTitle: false, log: _log);
+            {
+                if (operation.Move)
+                {
+                    MacroOperations.MoveBook(operation.Source.Info, target.Info, _log);
+                    }
+                else
+                    MacroOperations.CopyBook(operation.Source.Info, target.Info, keepTargetTitle: false, log: _log);
 
-            SetStatus(Loc.T(operation.Move ? "Status.BookMoved" : "Status.BookCopied",
-                            operation.Source.Info.Number, operation.Target.Info.Number));
+                SetStatus(Loc.T(operation.Move ? "Status.BookMoved" : "Status.BookCopied",
+                                operation.Source.Info.Number, target.Info.Number));
+            }
         }
         catch (MacroFileException ex)
         {

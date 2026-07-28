@@ -55,22 +55,20 @@ public class MainWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void UntitledBooksWithNoSetsAreHiddenUntilAskedFor()
+    public void AllFortyBooksAreListed_EmptyOnesIncluded()
     {
+        // A character has forty book slots whatever it has written in them. They used to be hidden
+        // behind a checkbox, which made an emptied book vanish and « put this on book 12 » a chore.
         _temp.AddCharacter("e5f6a7", 0);        // no title files: books 2-40 are untitled and empty
         var viewModel = NewViewModel();
         var character = viewModel.Characters.OfType<CharacterNodeViewModel>().First(c => c.Character.Id == "e5f6a7");
 
-        Assert.Single(character.Children);
-
-        viewModel.ShowEmptyBooks = true;
         Assert.Equal(40, character.Children.Count);
     }
 
     [Fact]
-    public void ATitledBookIsShownEvenWithoutASingleSetFile()
+    public void ABookWithNoSetFileIsListedLikeAnyOther()
     {
-        // The sample title files name all 40 books, so none of them is hidden.
         var character = NewViewModel().Characters.OfType<CharacterNodeViewModel>().First();
 
         Assert.Equal(40, character.Children.Count);

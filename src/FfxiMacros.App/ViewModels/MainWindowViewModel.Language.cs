@@ -41,8 +41,10 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(UserFolder));
         OnPropertyChanged(nameof(DirtySummary));
         OnPropertyChanged(nameof(CurrentSetTitle));
+        OnPropertyChanged(nameof(GameStatusSummary));
         OnPropertyChanged(nameof(GameRunningWarning));
         OnPropertyChanged(nameof(PendingBookOperation));
+        OnPropertyChanged(nameof(ClipboardSummary));
 
         foreach (var character in Characters.OfType<CharacterNodeViewModel>())
         {

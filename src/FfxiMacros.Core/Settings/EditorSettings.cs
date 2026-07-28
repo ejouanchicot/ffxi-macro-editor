@@ -35,6 +35,7 @@ public sealed class EditorSettings
     /// <summary>Interface language, <c>en</c> or <c>fr</c>. English until the user says otherwise.</summary>
     public string Language { get; set; } = "en";
 
+
     [JsonIgnore]
     public string? SourcePath { get; set; }
 

@@ -26,3 +26,11 @@ PROMPT_FFXI_Macro_Editor.md
 # Sets exportes depuis l'application : ils portent le nom du personnage et ses macros.
 /*-book*-set*.txt
 /*-book*-set*.json
+
+# Relevés du scanner de mémoire : adresses et journaux d'une session de jeu précise, sans valeur
+# une fois le client relancé.
+tools/**/candidates.txt
+tools/**/*.log
+
+# Images sources fournies à la main pour fabriquer l'icône ; l'icône elle-même est versionnée.
+/ChatGPT Image*.png

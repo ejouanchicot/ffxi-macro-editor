@@ -14,6 +14,7 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
 {
     private bool _isDirty;
     private bool _isCurrent;
+    private int? _usedMacros;
 
     internal SetNodeViewModel(MacroSetInfo info, BookNodeViewModel parent)
     {
@@ -42,8 +43,45 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
             ? Loc.T("Tree.SetBadSize", Info.SizeBytes)
             : Info.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
 
-    /// <summary>Dims the tab of a set the game has never written.</summary>
-    public double TabOpacity => Info.Exists ? 1.0 : 0.45;
+    /// <summary>
+    /// How many of the 20 slots hold a macro. Read straight from the file when the set has not been
+    /// opened yet, and cached: it is what the tab is dimmed by, so it is asked for on every redraw.
+    /// </summary>
+    public int UsedMacros
+    {
+        get
+        {
+            if (Loaded is not null)
+                return Loaded.Macros.Count(m => !m.IsEmpty);
+
+            if (_usedMacros is null)
+            {
+                try
+                {
+                    _usedMacros = Info.Exists ? Info.Load().Macros.Count(m => !m.IsEmpty) : 0;
+                }
+                catch (MacroFileException)
+                {
+                    _usedMacros = 0;   // a file that will not load is reported when it is opened
+                }
+            }
+
+            return _usedMacros.Value;
+        }
+    }
+
+    /// <summary>True for a set holding nothing, whether or not the game ever wrote its file.</summary>
+    public bool IsEmptySet => UsedMacros == 0;
+
+    /// <summary>
+    /// Dims the tab of a set with nothing in it.
+    /// </summary>
+    /// <remarks>
+    /// It used to follow the file's existence, which told the player something about the disk rather
+    /// than about their macros: a set the game had written and then emptied looked as full as one
+    /// carrying twenty macros.
+    /// </remarks>
+    public double TabOpacity => IsEmptySet ? 0.4 : 1.0;
 
     /// <summary>
     /// True for set 1, the set players anchor on: the game's up arrow from there reaches set 10 and
@@ -65,18 +103,49 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
     /// <summary>True when a macro holds text that cannot be written back; blocks saving.</summary>
     public bool HasError => Macros.Any(m => m.HasError);
 
+    /// <summary>
+    /// When the file was last written, as it stood the moment this set was read.
+    /// </summary>
+    /// <remarks>
+    /// Compared against the file on disk to notice the game rewriting a set behind the editor's
+    /// back — which it does to the book it holds, whenever it switches away from it.
+    /// </remarks>
+    private DateTime _readAtWriteUtc;
+
+    /// <summary>True when the file changed on disk since it was read here.</summary>
+    public bool ChangedOnDisk => IsLoaded && Info.LastWriteUtc != _readAtWriteUtc;
+
+    /// <summary>Re-reads what the file system says about the file, leaving the macros alone.</summary>
+    internal void RefreshFromDisk()
+    {
+        Info.Refresh();
+        RefreshFill();
+        RefreshLabels();
+    }
+
     /// <summary>Reads the file, or starts from an empty set when the file does not exist yet.</summary>
     public void Load()
     {
         Loaded = ReadOrCreate();
+        _readAtWriteUtc = Info.LastWriteUtc;
         Macros.Clear();
         for (int i = 0; i < MacroBook.MacroCount; i++)
             Macros.Add(new MacroSlotViewModel(this, i));
 
         _isDirty = false;
         RefreshLabels();
+        RefreshFill();
         OnPropertyChanged(nameof(IsLoaded));
         OnPropertyChanged(nameof(HasError));
+    }
+
+    /// <summary>Re-asks how full the set is, after anything that could have changed it.</summary>
+    private void RefreshFill()
+    {
+        _usedMacros = null;
+        OnPropertyChanged(nameof(UsedMacros));
+        OnPropertyChanged(nameof(IsEmptySet));
+        OnPropertyChanged(nameof(TabOpacity));
     }
 
     /// <summary>Throws away unsaved edits and re-reads the file.</summary>
@@ -85,12 +154,15 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
         if (!IsLoaded)
             return;
 
+        Info.Refresh();
         Loaded = ReadOrCreate();
+        _readAtWriteUtc = Info.LastWriteUtc;
         foreach (var slot in Macros)
             slot.NotifyMacroReplaced();
 
         _isDirty = false;
         RefreshLabels();
+        RefreshFill();
         Parent.RefreshUpwards();
     }
 
@@ -101,9 +173,11 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
 
         DropDeadBytes();
         Info.Save(Loaded);   // refreshes the file's size and timestamp
+        _readAtWriteUtc = Info.LastWriteUtc;
 
         _isDirty = false;
         RefreshLabels();
+        RefreshFill();
         Parent.RefreshUpwards();
     }
 
@@ -114,6 +188,7 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
         OnPropertyChanged(nameof(IsDirty));
         OnPropertyChanged(nameof(HasError));
         RefreshLabels();
+        RefreshFill();
         Parent.RefreshUpwards();
         Changed?.Invoke();
     }

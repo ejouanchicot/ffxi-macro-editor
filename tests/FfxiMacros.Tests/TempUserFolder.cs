@@ -65,6 +65,16 @@ public sealed class TempUserFolder : IDisposable
         return path;
     }
 
+    /// <summary>Writes <c>mcr.sys</c>, the file where the game records the set a character is on.</summary>
+    public void SetCurrentSet(string id, int fileIndex)
+    {
+        string folder = Path.Combine(UserFolder, id);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(
+            Path.Combine(folder, MacroSystemFile.FileName),
+            FfxiContainer.Write(1, BitConverter.GetBytes(fileIndex)));
+    }
+
     public void Touch(string id, int fileIndex, DateTime whenUtc) =>
         File.SetLastWriteTimeUtc(Path.Combine(UserFolder, id, MacroFileNaming.FileName(fileIndex)), whenUtc);
 

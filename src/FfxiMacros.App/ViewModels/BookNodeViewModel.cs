@@ -6,9 +6,24 @@ using FfxiMacros.App.Localization;
 
 namespace FfxiMacros.App.ViewModels;
 
+/// <summary>How the editor came to know which book a character has open, best first.</summary>
+public enum OpenBookSource
+{
+    /// <summary>From the files: where the game recorded the character when it saved its state.</summary>
+    File,
+
+    /// <summary>From the Windower addon, which hears the <c>/macro book</c> commands go past.</summary>
+    Windower,
+
+    /// <summary>From the client's own memory — true whatever the player did to get there.</summary>
+    Memory,
+}
+
 /// <summary>One of the 40 books of a character, holding its 10 sets.</summary>
 public sealed class BookNodeViewModel : TreeNodeViewModel
 {
+    private bool _isOpenInGame;
+
     internal BookNodeViewModel(BookInfo info, CharacterNodeViewModel parent)
     {
         Info = info;
@@ -40,18 +55,47 @@ public sealed class BookNodeViewModel : TreeNodeViewModel
 
     public override double RowOpacity => Info.Exists ? 1.0 : 0.5;
 
+    /// <summary>True for the book the character is on, reported live or recorded in <c>mcr.sys</c>.</summary>
+    public override bool IsOpenInGame => _isOpenInGame;
+
+    /// <summary>Where that came from, which is what the tooltip explains.</summary>
+    private OpenBookSource _source;
+
+    internal void SetOpenInGame(bool value, OpenBookSource source)
+    {
+        if (_isOpenInGame == value && _source == source)
+            return;
+
+        _isOpenInGame = value;
+        _source = source;
+        OnPropertyChanged(nameof(IsOpenInGame));
+        OnPropertyChanged(nameof(Detail));
+    }
+
     public override string Detail
     {
         get
         {
             int sets = Info.SetCount;
-            return sets == 0 ? Loc.T("Tree.BookEmpty")
-                 : sets == 1 ? Loc.T("Tree.SetOne")
-                 : Loc.T("Tree.SetMany", sets);
+            string counts = sets == 0 ? Loc.T("Tree.BookEmpty")
+                          : sets == 1 ? Loc.T("Tree.SetOne")
+                          : Loc.T("Tree.SetMany", sets);
+
+            if (!IsOpenInGame)
+                return counts;
+
+            return $"{counts} · {Loc.T(_source switch
+            {
+                OpenBookSource.Memory => "Tree.OpenInGameMemory",
+                OpenBookSource.Windower => "Tree.OpenInGameLive",
+                _ => "Tree.OpenInGame",
+            })}";
         }
     }
 
     public override bool IsDirty => Sets.Any(s => s.IsDirty);
+
+    public override bool CanRename => true;
 
     /// <summary>True when the book has no set file on disk and still carries its placeholder title.</summary>
     public bool IsEmptyAndUntitled => !Info.Exists && Info.IsUntitled;

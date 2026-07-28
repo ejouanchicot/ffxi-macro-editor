@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -15,6 +17,7 @@ public partial class MainWindow : Window
     private const string DragFormat = "ffxi-macro-node";
 
     private object? _dragged;
+    private object? _pressedNode;
     private Point _pressPosition;
     private bool _forceClose;
 
@@ -24,6 +27,7 @@ public partial class MainWindow : Window
         DataContextChanged += OnDataContextChanged;
         Closing += OnClosing;
 
+        AddHandler(KeyDownEvent, OnClipboardKey, RoutingStrategies.Bubble);
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -111,17 +115,30 @@ public partial class MainWindow : Window
     /// <summary>Remembers what is under the cursor, so a drag can start once it actually moves.</summary>
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Every press, left or right: the right button is what opens a context menu, and the menu
+        // acts on whatever was under the cursor at that moment.
+        _pressedNode = NodeUnder(e.Source as Control);
+
         _dragged = null;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
         _pressPosition = e.GetPosition(this);
-        _dragged = (e.Source as Control)?.DataContext switch
+
+        // Only a macro and a book can be dragged: a set is a tab, and a character is a folder.
+        _dragged = _pressedNode is MacroSlotViewModel or BookNodeViewModel ? _pressedNode : null;
+    }
+
+    /// <summary>The macro, set, book or character a control belongs to.</summary>
+    private static object? NodeUnder(Control? source)
+    {
+        for (var control = source; control is not null; control = control.Parent as Control)
         {
-            MacroSlotViewModel slot => slot,
-            BookNodeViewModel book => book,
-            _ => null,
-        };
+            if (control.DataContext is MacroSlotViewModel or SetNodeViewModel or TreeNodeViewModel)
+                return control.DataContext;
+        }
+
+        return null;
     }
 
     private async void OnPointerMoved(object? sender, PointerEventArgs e)
@@ -190,16 +207,177 @@ public partial class MainWindow : Window
         return null;
     }
 
-    // ---------------------------------------------------------------- context menu
+    // ---------------------------------------------------------------- copy and paste
+
+    /// <summary>
+    /// Ctrl+C and Ctrl+V on whatever the keyboard is on: a macro slot, a set tab or a book.
+    /// </summary>
+    /// <remarks>
+    /// A text box handles both gestures itself and marks the event handled, so typing in a macro
+    /// line still copies text rather than the macro around it — this only ever sees the keys the
+    /// fields did not want.
+    /// </remarks>
+    private void OnClipboardKey(object? sender, KeyEventArgs e)
+    {
+        if (ViewModel is not { } viewModel)
+            return;
+
+        if (e.Key == Key.F2 && e.KeyModifiers == KeyModifiers.None)
+        {
+            viewModel.BeginRename(FocusedNode() as TreeNodeViewModel);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyModifiers != KeyModifiers.Control)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.C:
+                viewModel.CopyToClipboard(FocusedNode());
+                e.Handled = true;
+                break;
+
+            case Key.V:
+                viewModel.PasteFromClipboard(FocusedNode());
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The macro, set or book the keyboard is on. Falls back to the macro being edited, so Ctrl+C
+    /// from a toolbar button or the window itself still copies what the user is looking at.
+    /// </summary>
+    private object? FocusedNode()
+    {
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+
+        for (var control = focused; control is not null; control = control.Parent as Control)
+        {
+            if (control.DataContext is MacroSlotViewModel or SetNodeViewModel or BookNodeViewModel)
+                return control.DataContext;
+        }
+
+        return ViewModel?.SelectedMacro;
+    }
 
     private void OnCopyMacro(object? sender, RoutedEventArgs e) =>
-        ViewModel?.CopyMacroToClipboard(SlotOf(sender));
+        ViewModel?.CopyMacroToClipboard(NodeOf<MacroSlotViewModel>(sender));
 
     private void OnPasteMacro(object? sender, RoutedEventArgs e) =>
-        ViewModel?.PasteMacroFromClipboard(SlotOf(sender));
+        ViewModel?.PasteMacroFromClipboard(NodeOf<MacroSlotViewModel>(sender));
 
-    private static MacroSlotViewModel? SlotOf(object? sender) =>
-        (sender as MenuItem)?.DataContext as MacroSlotViewModel;
+    private void OnCopySet(object? sender, RoutedEventArgs e) =>
+        ViewModel?.CopySetToClipboard(NodeOf<SetNodeViewModel>(sender));
+
+    private void OnPasteSet(object? sender, RoutedEventArgs e) =>
+        ViewModel?.PasteSetFromClipboard(NodeOf<SetNodeViewModel>(sender));
+
+    // ---------------------------------------------------------------- renaming a book
+
+    private void OnRenameNode(object? sender, RoutedEventArgs e) =>
+        ViewModel?.BeginRename(NodeOf<TreeNodeViewModel>(sender));
+
+    /// <summary>Puts the caret in the box the moment the row swaps its label for one.</summary>
+    private static void OnRenameBoxShown(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is not TextBox box)
+            return;
+
+        box.Focus();
+        box.SelectAll();
+    }
+
+    private void OnRenameKey(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox box || box.DataContext is not TreeNodeViewModel node)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Enter:
+                e.Handled = true;
+                ViewModel?.CommitRename(node);
+                break;
+
+            case Key.Escape:
+                e.Handled = true;
+                ViewModel?.CancelRename(node);
+                break;
+        }
+    }
+
+    /// <summary>Clicking away commits, the way renaming a file does everywhere else.</summary>
+    private void OnRenameCommitted(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: TreeNodeViewModel node })
+            ViewModel?.CommitRename(node);
+    }
+
+    private void OnClearSet(object? sender, RoutedEventArgs e) =>
+        ViewModel?.ClearSet(NodeOf<SetNodeViewModel>(sender));
+
+    private void OnClearBook(object? sender, RoutedEventArgs e) =>
+        ViewModel?.RequestBookClear(NodeOf<BookNodeViewModel>(sender));
+
+    private void OnCopyBook(object? sender, RoutedEventArgs e) =>
+        ViewModel?.CopyBookToClipboard(NodeOf<BookNodeViewModel>(sender));
+
+    private void OnPasteBook(object? sender, RoutedEventArgs e) =>
+        ViewModel?.PasteBookFromClipboard(NodeOf<BookNodeViewModel>(sender));
+
+    /// <summary>
+    /// What a menu entry acts on: the node the right-click landed on, falling back to the data the
+    /// menu inherited from the control it hangs off.
+    /// </summary>
+    private T? NodeOf<T>(object? sender) where T : class =>
+        _pressedNode as T ?? (sender as MenuItem)?.DataContext as T;
+
+    private void OnMacroMenuOpening(object? sender, CancelEventArgs e) =>
+        EnablePaste(sender, viewModel => viewModel.CanPasteMacro);
+
+    private void OnSetMenuOpening(object? sender, CancelEventArgs e) =>
+        EnablePaste(sender, viewModel => viewModel.CanPasteSet);
+
+    /// <summary>
+    /// The tree lists characters as well as books and both share one row template, so the menu
+    /// shows only the entries that mean something for the row it was opened on.
+    /// </summary>
+    private void OnTreeMenuOpening(object? sender, CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        bool book = _pressedNode is BookNodeViewModel || menu.DataContext is BookNodeViewModel;
+
+        foreach (var item in menu.Items.OfType<Control>())
+        {
+            if (Equals(item.Tag, "character"))
+                item.IsVisible = !book;
+            else if (Equals(item.Tag, "book") || Equals(item.Tag, "paste"))
+                item.IsVisible = book;
+        }
+
+        EnablePaste(sender, viewModel => viewModel.CanPasteBook);
+    }
+
+    /// <summary>
+    /// Greys out the « Paste » entry when its clipboard is empty.
+    /// </summary>
+    /// <remarks>
+    /// Done as the menu opens rather than by a binding: a context menu lives in a popup of its own,
+    /// so a binding walking up to the window is one more thing that can quietly resolve to nothing.
+    /// </remarks>
+    private void EnablePaste(object? sender, Func<MainWindowViewModel, bool> canPaste)
+    {
+        if (sender is not ContextMenu menu || ViewModel is not { } viewModel)
+            return;
+
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, "paste")))
+            item.IsEnabled = canPaste(viewModel);
+    }
 
     // ---------------------------------------------------------------- file dialogs
 

@@ -7,6 +7,8 @@ namespace FfxiMacros.App.ViewModels;
 public abstract class TreeNodeViewModel : ViewModelBase
 {
     private bool _isExpanded;
+    private bool _isRenaming;
+    private string _renameDraft = "";
 
     public ObservableCollection<TreeNodeViewModel> Children { get; } = [];
 
@@ -30,6 +32,9 @@ public abstract class TreeNodeViewModel : ViewModelBase
     /// <summary>Dimmed for a book the game has never written a set file for.</summary>
     public virtual double RowOpacity => 1.0;
 
+    /// <summary>Marks the book the game has this character on; never true for a character row.</summary>
+    public virtual bool IsOpenInGame => false;
+
     /// <summary>Characters carry more weight than the books listed under them.</summary>
     public virtual FontWeight HeaderWeight => FontWeight.Normal;
 
@@ -40,6 +45,26 @@ public abstract class TreeNodeViewModel : ViewModelBase
     {
         get => _isExpanded;
         set => SetField(ref _isExpanded, value);
+    }
+
+    /// <summary>
+    /// Books carry a title of their own, written to <c>mcr.ttl</c> and read by the game; a character
+    /// is a folder on disk and has no name to change here.
+    /// </summary>
+    public virtual bool CanRename => false;
+
+    /// <summary>True while the row shows a text box instead of its label.</summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        internal set => SetField(ref _isRenaming, value);
+    }
+
+    /// <summary>The name being typed, kept apart from the stored one until it is committed.</summary>
+    public string RenameDraft
+    {
+        get => _renameDraft;
+        set => SetField(ref _renameDraft, value);
     }
 
     /// <summary>Re-raises the properties that change when an edit happens somewhere below.</summary>

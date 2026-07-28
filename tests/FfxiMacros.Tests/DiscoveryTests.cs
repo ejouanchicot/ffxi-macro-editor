@@ -108,8 +108,11 @@ public class DiscoveryTests
     // ---------------------------------------------------------------- scanning
 
     [Fact]
-    public void Scan_ListsCharactersMostRecentlyPlayedFirst()
+    public void Scan_ListsCharactersByName_AndStillKnowsWhoWasPlayedLast()
     {
+        // The order has to hold still: with two clients running, sorting by the most recent write
+        // reshuffled the list under the user on every refresh. Who was played last is a question
+        // the library still answers — it just no longer decides the order.
         using var temp = new TempUserFolder();
         temp.AddCharacter("aaaa1", 0);
         temp.AddCharacter("bbbb2", 0);
@@ -118,7 +121,7 @@ public class DiscoveryTests
 
         var library = MacroLibrary.Scan(temp.UserFolder);
 
-        Assert.Equal(["bbbb2", "aaaa1"], library.Characters.Select(c => c.Id));
+        Assert.Equal(["aaaa1", "bbbb2"], library.Characters.Select(c => c.Id));
         Assert.Equal("bbbb2", library.MostRecent!.Id);
     }
 

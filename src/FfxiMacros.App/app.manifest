@@ -2,6 +2,23 @@
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="FfxiMacroEditor" />
 
+  <!--
+    Asks for administrator rights at launch.
+
+    Reading which macro book a client has open means reading another process's memory, and Windows
+    only allows that to something holding at least the privileges of what it is reading — FFXI runs
+    elevated, so the editor has to as well. Requested here rather than left to the user: the symptom
+    otherwise is a marker that silently never appears, which is exactly the kind of thing nobody
+    diagnoses. Refusing the prompt costs the reading and nothing else; every other feature works.
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>

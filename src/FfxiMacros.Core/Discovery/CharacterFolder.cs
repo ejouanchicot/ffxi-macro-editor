@@ -46,6 +46,29 @@ public sealed class CharacterFolder
     /// <summary>Most recent macro write, for spotting the character currently being played.</summary>
     public DateTime LastWriteUtc { get; private set; }
 
+    /// <summary>
+    /// The set the game recorded this character on, from <c>mcr.sys</c>; null when it says nothing.
+    /// </summary>
+    public int? CurrentFileIndex { get; private set; }
+
+    /// <summary>When the game last wrote that state — how old the answer is.</summary>
+    public DateTime? CurrentWrittenUtc { get; private set; }
+
+    /// <summary>Book 1..40 the game recorded, or null.</summary>
+    public int? CurrentBookNumber =>
+        CurrentFileIndex is { } index ? MacroFileNaming.BookOf(index) : null;
+
+    /// <summary>Set 1..10 the game recorded, or null.</summary>
+    public int? CurrentSetNumber =>
+        CurrentFileIndex is { } index ? MacroFileNaming.SetOf(index) : null;
+
+    /// <summary>Re-reads <c>mcr.sys</c>, which the client rewrites when it saves its state.</summary>
+    public void RefreshCurrent()
+    {
+        CurrentFileIndex = MacroSystemFile.ReadFileIndex(Path);
+        CurrentWrittenUtc = MacroSystemFile.WrittenUtc(Path);
+    }
+
     /// <summary>Files named <c>mcr*.dat</c> that do not match the game's naming and were skipped.</summary>
     public IReadOnlyList<string> SkippedFiles { get; private set; } = [];
 
@@ -130,6 +153,7 @@ public sealed class CharacterFolder
 
         character.LastWriteUtc = lastWrite;
         character.SkippedFiles = skipped;
+        character.RefreshCurrent();
         log.Debug($"{path}: {character.SetFileCount} set file(s) across {character.BookCount} book(s).");
 
         return character;

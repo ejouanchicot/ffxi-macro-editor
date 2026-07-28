@@ -13,6 +13,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IMacroLog? _log;
     private readonly HashSet<string> _backedUpCharacters = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>What the Windower addon last reported, per character.</summary>
+    private IReadOnlyList<LiveMacroState> _liveStates = [];
+
+    /// <summary>Where the addon writes its reports. Settable so tests stay out of the real folder.</summary>
+    public string LiveStateFolder { get; set; } = LiveMacroStateStore.DefaultFolder;
+
+    /// <summary>What each running client has open, read from its memory.</summary>
+    private IReadOnlyList<OpenBook> _openBooks = [];
+
+    private readonly GameMemoryProbe _memory;
+
+    /// <summary>
+    /// Reads the book each client has open. Replaceable, so tests never touch a live process.
+    /// </summary>
+    public Func<IReadOnlyList<OpenBook>> ProbeOpenBooks { get; set; } = () => [];
+
     private EditorSettings _settings;
     private MacroLibrary? _library;
     private TreeNodeViewModel? _selectedNode;
@@ -21,12 +37,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private MacroSlotViewModel? _selectedMacro;
     private string _status = "";
     private bool _statusIsError;
-    private bool _showEmptyBooks;
 
     public MainWindowViewModel(EditorSettings settings, IMacroLog? log = null)
     {
         _settings = settings;
         _log = log;
+
+        _memory = new GameMemoryProbe(log);
+        ProbeOpenBooks = _memory.Read;
 
         ChooseFolderCommand = new AsyncRelayCommand(ChooseFolderAsync);
         RefreshCommand = new RelayCommand(Refresh, () => _library is not null);
@@ -99,19 +117,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         1 => Loc.T("Status.DirtyOne"),
         _ => Loc.T("Status.DirtyMany", DirtyCount),
     };
-
-    public bool ShowEmptyBooks
-    {
-        get => _showEmptyBooks;
-        set
-        {
-            if (!SetField(ref _showEmptyBooks, value))
-                return;
-
-            foreach (var character in Characters.OfType<CharacterNodeViewModel>())
-                character.ShowEmptyBooks = value;
-        }
-    }
 
     public TreeNodeViewModel? SelectedNode
     {
@@ -282,11 +287,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         BuildTree();
         RefreshGameState();
+        WatchFolder(_library.UserFolder);
 
-        SetStatus(IsGameRunning
-            ? GameRunningWarning
-            : $"{_library.Characters.Count} personnage(s), {_library.Characters.Sum(c => c.SetFileCount)} set(s) de macros.",
-            error: IsGameRunning);
+        // Opening a folder reports what was found, whether or not a client is running: who is in
+        // game is shown in the corner of the status bar, and does not need to shout over this.
+        SetStatus($"{_library.Characters.Count} personnage(s), {_library.Characters.Sum(c => c.SetFileCount)} set(s) de macros.");
+
+        // Unless Windower is reporting someone this folder cannot place — that needs saying, and
+        // saying at startup rather than only when a file happens to change afterwards.
+        ReportUnmatchedLiveState();
     }
 
     private void Refresh()
@@ -305,24 +314,31 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void BuildTree()
     {
+        _liveStates = LiveMacroStateStore.ReadAll(LiveStateFolder, _log);
         Characters.Clear();
         CurrentSet = null;
         SelectedMacro = null;
 
         foreach (var character in _library!.Characters)
         {
-            var node = new CharacterNodeViewModel(character, ShowEmptyBooks);
+            var node = new CharacterNodeViewModel(character);
             foreach (var set in node.Books.SelectMany(b => b.Sets))
                 set.Changed = NotifyEdited;
+
+            MarkBookOpenInGame(node);
             Characters.Add(node);
         }
 
         // Open straight onto the most recently played character's first real book, so the window
-        // shows macros rather than an empty pane.
-        if (Characters.FirstOrDefault() is CharacterNodeViewModel first)
+        // shows macros rather than an empty pane. The list itself is in name order, so this has to
+        // ask which character was played last rather than take the one at the top.
+        var recent = Characters.OfType<CharacterNodeViewModel>()
+            .MaxBy(c => c.Character.LastWriteUtc);
+
+        if (recent is not null)
         {
-            first.IsExpanded = true;
-            var book = first.Books.FirstOrDefault(b => b.Info.Exists) ?? first.Books.FirstOrDefault();
+            recent.IsExpanded = true;
+            var book = recent.Books.FirstOrDefault(b => b.Info.Exists) ?? recent.Books.FirstOrDefault();
             if (book is not null)
                 SelectedNode = book;
         }
@@ -457,6 +473,102 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             SetStatus(ex.ToString(), error: true);
         }
     }
+
+    /// <summary>
+    /// Flags the book the game says the character is on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Taken from <c>mcr.sys</c>, which the client writes for itself — no guessing involved. The
+    /// first attempt did guess, marking the book whose files were written most recently, and it was
+    /// wrong every time in the most confusing way possible: the client writes the book it is
+    /// <em>leaving</em>, so the marker always pointed at the book the player had just come from.
+    /// </para>
+    /// <para>
+    /// That file is written when the client saves its state — logging in, logging out — and not at
+    /// every book change, so it goes stale the moment the player starts moving around. Any macro
+    /// file written after it is proof of exactly that: the client has been switching books since,
+    /// and where it went is not written down anywhere. The marker is then dropped, because no
+    /// marker beats one pointing at the book the player left an hour ago.
+    /// </para>
+    /// </remarks>
+    private void MarkBookOpenInGame(CharacterNodeViewModel character)
+    {
+        var folder = character.Character;
+        BookNodeViewModel? open = null;
+
+        // The client's own memory holds the answer, so nothing else is asked when it can be read.
+        if (OpenBookFor(folder) is { } fromMemory)
+        {
+            open = character.Books.FirstOrDefault(b => b.Info.Number == fromMemory.Book);
+            foreach (var book in character.Books)
+                book.SetOpenInGame(ReferenceEquals(book, open), OpenBookSource.Memory);
+
+            return;
+        }
+
+        // A Windower report beats anything worked out from the files: it hears the /macro book
+        // commands go past, which covers everything except a book picked from the game's own menu.
+        if (LiveStateFor(folder) is { } live)
+        {
+            var reported = character.Books.FirstOrDefault(b => b.Info.Number == live.Book);
+
+            // Unless the client has written that book since — which is what leaving it looks like.
+            // The addon only hears the `/macro book` commands; a book changed from the game's own
+            // menu passes it by, and this is what keeps the marker from pointing at a book the
+            // player walked away from ten minutes ago.
+            if (reported is not null && reported.Info.LastWriteUtc <= live.WrittenUtc + SameFlush)
+                open = reported;
+
+            foreach (var book in character.Books)
+                book.SetOpenInGame(ReferenceEquals(book, open), OpenBookSource.Windower);
+
+            return;
+        }
+
+        if (folder.CurrentBookNumber is { } number && folder.CurrentWrittenUtc is { } recordedAt)
+        {
+            var newestWrite = character.Books
+                .Where(b => b.Info.Exists)
+                .Select(b => b.Info.LastWriteUtc)
+                .DefaultIfEmpty()
+                .Max();
+
+            // The client flushes its books and its state together when it leaves, so writes landing
+            // alongside mcr.sys are part of that same save rather than a sign of a later move.
+            if (newestWrite <= recordedAt + SameFlush)
+                open = character.Books.FirstOrDefault(b => b.Info.Number == number);
+        }
+
+        foreach (var book in character.Books)
+            book.SetOpenInGame(ReferenceEquals(book, open), OpenBookSource.File);
+    }
+
+    /// <summary>
+    /// What the client's memory says for a character.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the folder itself, not on a name: a client is recognised by the book titles it is
+    /// holding, which are that character's and no one else's. Nothing to label, nothing to declare.
+    /// </remarks>
+    private OpenBook? OpenBookFor(CharacterFolder character) =>
+        _openBooks.FirstOrDefault(open =>
+            string.Equals(open.CharacterId, character.Id, StringComparison.OrdinalIgnoreCase));
+
+    private static readonly TimeSpan SameFlush = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// The addon's report for a character, matched on the folder name.
+    /// </summary>
+    /// <remarks>
+    /// A character's USER folder is named after its id in hexadecimal, and Windower knows that same
+    /// id — so the two line up without the user having to tell the editor anything. The name is
+    /// tried as well, for a folder that was given one by hand.
+    /// </remarks>
+    private LiveMacroState? LiveStateFor(CharacterFolder character) =>
+        _liveStates.FirstOrDefault(state =>
+            string.Equals(state.CharacterId, character.Id, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(state.CharacterName, character.DisplayName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Called by the view whenever an edit happened, to refresh the toolbar state.</summary>
     public void NotifyEdited()

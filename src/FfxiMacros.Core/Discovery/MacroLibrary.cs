@@ -18,11 +18,20 @@ public sealed class MacroLibrary
 
     public string UserFolder { get; }
 
-    /// <summary>Characters, most recently played first.</summary>
+    /// <summary>
+    /// Characters, in a stable order: by the name they go by.
+    /// </summary>
+    /// <remarks>
+    /// They used to be listed most recently played first, which reads well for one player and badly
+    /// for two: with both clients running and writing their books, the list reshuffled itself on
+    /// every refresh. The list is now something to learn, and « who was played last » is only used
+    /// to decide which book to open on.
+    /// </remarks>
     public IReadOnlyList<CharacterFolder> Characters { get; }
 
     /// <summary>The character with the most recent macro write — usually the one being played.</summary>
-    public CharacterFolder? MostRecent => Characters.FirstOrDefault();
+    public CharacterFolder? MostRecent =>
+        Characters.Count == 0 ? null : Characters.MaxBy(c => c.LastWriteUtc);
 
     public CharacterFolder? ById(string id) =>
         Characters.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -81,7 +90,9 @@ public sealed class MacroLibrary
             }
         }
 
-        characters.Sort((a, b) => b.LastWriteUtc.CompareTo(a.LastWriteUtc));
+        // By name, not by when they were last written: two clients running keep rewriting their
+        // books, and a list that reorders itself under the cursor is unusable.
+        characters.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
         log.Info($"{resolved}: {characters.Count} character(s), {characters.Sum(c => c.SetFileCount)} macro set file(s).");
 
         return new MacroLibrary(resolved, characters);

@@ -9,6 +9,12 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!--
+      The icon Windows shows: desktop, taskbar, Explorer. Built with seven sizes from 16 to 256,
+      because Windows picks one rather than scaling, and a 256 squeezed into 16 pixels turns to mud.
+    -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>FfxiMacroEditor</AssemblyName>
     <RootNamespace>FfxiMacros.App</RootNamespace>
@@ -46,6 +52,11 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.2.3" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same artwork again, for the window itself: Windows dresses the exe, Avalonia the window. -->
+    <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
   <ItemGroup>

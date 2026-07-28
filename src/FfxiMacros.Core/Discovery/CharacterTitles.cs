@@ -11,8 +11,8 @@ public sealed class CharacterTitles
 {
     public const int BookCount = MacroFileNaming.BooksPerCharacter;   // 40
 
-    private readonly BookTitleSet _primary;
-    private readonly BookTitleSet _secondary;
+    private BookTitleSet _primary;
+    private BookTitleSet _secondary;
 
     private CharacterTitles(string folder, BookTitleSet primary, BookTitleSet secondary)
     {
@@ -30,9 +30,9 @@ public sealed class CharacterTitles
     public string SecondaryPath => Path.Combine(Folder, BookTitleSet.SecondaryFileName);
 
     /// <summary>False when a title file was missing on disk; a save will create it.</summary>
-    public bool PrimaryExisted { get; private init; }
+    public bool PrimaryExisted { get; private set; }
 
-    public bool SecondaryExisted { get; private init; }
+    public bool SecondaryExisted { get; private set; }
 
     /// <summary>True when either file's stored MD5 did not match its data.</summary>
     public bool HasDigestMismatch => !_primary.DigestWasValid || !_secondary.DigestWasValid;
@@ -71,6 +71,27 @@ public sealed class CharacterTitles
             PrimaryExisted = primaryExisted,
             SecondaryExisted = secondaryExisted,
         };
+    }
+
+    /// <summary>
+    /// Re-reads both files, for when something else wrote them — the game does, on its own schedule.
+    /// </summary>
+    /// <remarks>
+    /// Safe to call at any time: a title is written the moment it is changed, so there is never an
+    /// edit in memory here waiting to be saved that this could throw away.
+    /// </remarks>
+    public void Reload(IMacroLog? log = null)
+    {
+        var (primary, primaryExisted) = LoadOne(PrimaryPath, log);
+        var (secondary, secondaryExisted) = LoadOne(SecondaryPath, log);
+
+        primary.IsSecondary = false;
+        secondary.IsSecondary = true;
+
+        _primary = primary;
+        _secondary = secondary;
+        PrimaryExisted = primaryExisted;
+        SecondaryExisted = secondaryExisted;
     }
 
     /// <summary>Writes both title files, recomputing their MD5.</summary>
