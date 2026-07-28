@@ -282,6 +282,32 @@
       <Setter Property="BorderBrush" Value="#1E2331" />
     </Style>
 
+    <!--
+      Being dragged: the slot is left behind as a hollow, because the macro itself is under the
+      cursor. Showing it in both places at once would say the wrong thing about what is happening.
+    -->
+    <Style Selector="Button.slot.dragging">
+      <Setter Property="Opacity" Value="0.25" />
+    </Style>
+
+    <!-- Where it would land, answered before the button is released. -->
+    <Style Selector="Button.slot.dropTarget /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    </Style>
+
+    <!-- The macro drawn under the cursor while it travels. -->
+    <Style Selector="Border.ghost">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="7" />
+      <Setter Property="Opacity" Value="0.93" />
+      <Setter Property="BoxShadow" Value="0 10 26 0 #99000000" />
+    </Style>
+
     <!-- Set 1: the set players anchor on, framed so its neighbours read at a glance. -->
     <Style Selector="Button.home /template/ ContentPresenter">
       <Setter Property="BorderBrush" Value="{DynamicResource Warn}" />

@@ -21,6 +21,11 @@
     <KeyBinding Gesture="Ctrl+Space" Command="{Binding TogglePhrasesCommand}" />
   </Window.KeyBindings>
 
+  <!--
+    The whole window, with a transparent sheet over it where a dragged macro is drawn. Windows'
+    own drag and drop offers no picture of what is being carried, so the editor draws it itself.
+  -->
+  <Panel>
   <DockPanel LastChildFill="True">
 
     <!--
@@ -461,4 +466,8 @@
 
     </Grid>
   </DockPanel>
+
+  <!-- Never in the way of the pointer: what is under the cursor has to stay reachable. -->
+  <Canvas Name="DragLayer" IsHitTestVisible="False" />
+  </Panel>
 </Window>

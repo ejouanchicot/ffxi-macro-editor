@@ -1,7 +1,12 @@
 using System.ComponentModel;
 
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -30,6 +35,7 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnClipboardKey, RoutingStrategies.Bubble);
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
     }
@@ -112,6 +118,208 @@ public partial class MainWindow : Window
 
     // ---------------------------------------------------------------- drag and drop
 
+    // ---------------------------------------------------------------- carrying a macro
+
+    /// <summary>
+    /// A macro being carried: the slot it left, the picture under the cursor, and where it was
+    /// grabbed inside that slot so it does not jump to the cursor's tip.
+    /// </summary>
+    /// <remarks>
+    /// Windows' own drag and drop carries data, not a picture: the pointer changes shape and
+    /// nothing else moves, so the macro appeared to teleport on release. This draws the whole
+    /// gesture instead — the slot empties, the macro follows the cursor, the slot it would land on
+    /// lights up, and on release the two swap by sliding past each other.
+    /// </remarks>
+    private Button? _carriedFrom;
+
+    /// <summary>
+    /// The sheet a carried macro is drawn on, looked up rather than taken from the generated field.
+    /// </summary>
+    /// <remarks>
+    /// This window loads its XAML itself, so the fields the compiler generates for named controls
+    /// are never assigned — reaching for one gives null, and the failure lands in an async handler
+    /// where it goes unnoticed. Asked for by name instead, once, the first time a macro is lifted.
+    /// </remarks>
+    private Canvas? _dragLayer;
+
+    private Canvas? Layer => _dragLayer ??= this.FindControl<Canvas>("DragLayer");
+
+    private Border? _carried;
+    private Point _grabOffset;
+    private Button? _dropTarget;
+
+    /// <summary>Long enough to read as a movement, short enough not to feel like a delay.</summary>
+    private static readonly TimeSpan SwapDuration = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>The eased slide the two macros make as they trade places.</summary>
+    private static Transitions Sliding() =>
+    [
+        new DoubleTransition { Property = Canvas.LeftProperty, Duration = SwapDuration, Easing = new CubicEaseOut() },
+        new DoubleTransition { Property = Canvas.TopProperty, Duration = SwapDuration, Easing = new CubicEaseOut() },
+    ];
+
+    private bool IsCarrying => _carried is not null;
+
+    /// <summary>Lifts a macro out of its slot and puts it under the cursor.</summary>
+    private void StartCarrying(Button slot, Point pointer)
+    {
+        if (Layer is not { } layer || slot.TranslatePoint(default, layer) is not { } origin)
+            return;
+
+        _carriedFrom = slot;
+        _grabOffset = pointer - origin;
+
+        _carried = new Border
+        {
+            Classes = { "ghost" },
+            Width = slot.Bounds.Width,
+            Height = slot.Bounds.Height,
+            Child = new TextBlock
+            {
+                Text = (slot.DataContext as MacroSlotViewModel)?.DisplayName ?? "",
+                FontSize = 12.5,
+                FontWeight = FontWeight.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+
+            // No transitions while it is being carried. They belong to the landing, and left on
+            // here they smooth every single mouse move: the macro then trails the cursor by a
+            // sixth of a second, which reads as the window struggling to keep up.
+        };
+
+        MoveCarried(pointer);
+        layer.Children.Add(_carried);
+        slot.Classes.Add("dragging");
+    }
+
+    private void MoveCarried(Point pointer)
+    {
+        if (_carried is null)
+            return;
+
+        Canvas.SetLeft(_carried, pointer.X - _grabOffset.X);
+        Canvas.SetTop(_carried, pointer.Y - _grabOffset.Y);
+    }
+
+    /// <summary>Lights up the slot the macro would land on, and only that one.</summary>
+    private void HighlightDropTarget(Point pointer)
+    {
+        var slot = SlotButtonAt(pointer);
+        if (ReferenceEquals(slot, _dropTarget))
+            return;
+
+        _dropTarget?.Classes.Remove("dropTarget");
+        _dropTarget = ReferenceEquals(slot, _carriedFrom) ? null : slot;
+        _dropTarget?.Classes.Add("dropTarget");
+    }
+
+    /// <summary>
+    /// The macro slot button under a point, or null.
+    /// </summary>
+    /// <remarks>
+    /// Up the visual tree, not the logical one. A hit test lands on whatever is drawn there, which
+    /// inside a button is a piece of its template — and a template part has no logical parent
+    /// leading back to the button it belongs to.
+    /// </remarks>
+    private Button? SlotButtonAt(Point point)
+    {
+        for (var visual = this.InputHitTest(point) as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Button { DataContext: MacroSlotViewModel } button)
+                return button;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Puts the macro down: the two slots slide past each other, and the swap lands as they arrive.
+    /// </summary>
+    private async void DropCarried(bool copy)
+    {
+        var carried = _carried;
+        var from = _carriedFrom;
+        var onto = _dropTarget;
+
+        _carried = null;
+        _carriedFrom = null;
+        _dropTarget = null;
+        onto?.Classes.Remove("dropTarget");
+
+        if (carried is null || from is null || Layer is not { } layer)
+            return;
+
+        var source = from.DataContext as MacroSlotViewModel;
+        var target = onto?.DataContext as MacroSlotViewModel;
+
+        // The slide is given to it now, for the one movement it has left to make.
+        carried.Transitions = Sliding();
+
+        // Nowhere to land: it goes back where it came from rather than vanishing.
+        Border? returning = target is not null && !copy ? Lift(onto!, from) : null;
+
+        if ((onto ?? from).TranslatePoint(default, layer) is { } landing)
+        {
+            Canvas.SetLeft(carried, landing.X);
+            Canvas.SetTop(carried, landing.Y);
+        }
+
+        await Task.Delay(SwapDuration);
+
+        layer.Children.Remove(carried);
+        if (returning is not null)
+            layer.Children.Remove(returning);
+
+        from.Classes.Remove("dragging");
+        onto?.Classes.Remove("dragging");
+
+        if (source is not null && target is not null)
+            ViewModel?.TransferMacro(source, target, copy);
+    }
+
+    /// <summary>
+    /// The macro being displaced, drawn sliding the other way.
+    /// </summary>
+    /// <remarks>
+    /// A swap is two movements. Showing only the one under the cursor would leave the other slot
+    /// changing without explanation, which is the very thing that made the old behaviour abrupt.
+    /// </remarks>
+    private Border? Lift(Button slot, Button towards)
+    {
+        if (Layer is not { } layer
+            || slot.TranslatePoint(default, layer) is not { } start
+            || towards.TranslatePoint(default, layer) is not { } end)
+        {
+            return null;
+        }
+
+        var moving = new Border
+        {
+            Classes = { "ghost" },
+            Width = slot.Bounds.Width,
+            Height = slot.Bounds.Height,
+            Opacity = 0.75,
+            Child = new TextBlock
+            {
+                Text = (slot.DataContext as MacroSlotViewModel)?.DisplayName ?? "",
+                FontSize = 12.5,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+            Transitions = Sliding(),
+        };
+
+        Canvas.SetLeft(moving, start.X);
+        Canvas.SetTop(moving, start.Y);
+        layer.Children.Add(moving);
+        slot.Classes.Add("dragging");
+
+        Canvas.SetLeft(moving, end.X);
+        Canvas.SetTop(moving, end.Y);
+        return moving;
+    }
+
     /// <summary>Remembers what is under the cursor, so a drag can start once it actually moves.</summary>
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -143,14 +351,35 @@ public partial class MainWindow : Window
 
     private async void OnPointerMoved(object? sender, PointerEventArgs e)
     {
+        Point position = e.GetPosition(this);
+
+        // A macro already in hand simply follows, and says where it would land.
+        if (IsCarrying)
+        {
+            MoveCarried(position);
+            HighlightDropTarget(position);
+            return;
+        }
+
+
         if (_dragged is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
-        // Enough slop that a click with a shaky hand is never mistaken for a drag: dropping a
-        // macro swaps two slots, which is not something to trigger by accident.
-        Point position = e.GetPosition(this);
-        if (Math.Abs(position.X - _pressPosition.X) < 14 && Math.Abs(position.Y - _pressPosition.Y) < 14)
+        // Enough slop that a click with a shaky hand is never mistaken for a drag, and no more:
+        // Windows itself lifts at four pixels, and every one beyond that is felt as the macro
+        // refusing to leave its slot.
+        if (Math.Abs(position.X - _pressPosition.X) < 5 && Math.Abs(position.Y - _pressPosition.Y) < 5)
             return;
+
+        // A macro is carried by the editor, which can draw it; a book still travels through
+        // Windows' drag and drop, since it is dropped on a tree far from where it was picked up.
+        if (_dragged is MacroSlotViewModel && SlotButtonAt(_pressPosition) is { } slot)
+        {
+            _dragged = null;
+            e.Pointer.Capture(this);
+            StartCarrying(slot, position);
+            return;
+        }
 
         object payload = _dragged;
         _dragged = null;
@@ -159,6 +388,17 @@ public partial class MainWindow : Window
         data.Set(DragFormat, payload);
 
         await DragDrop.DoDragDrop(e, data, DragDropEffects.Move | DragDropEffects.Copy);
+    }
+
+    /// <summary>Puts down whatever the pointer was carrying.</summary>
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!IsCarrying)
+            return;
+
+        e.Pointer.Capture(null);
+        e.Handled = true;
+        DropCarried(e.KeyModifiers.HasFlag(KeyModifiers.Control));
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
