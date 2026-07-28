@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>FfxiMacroEditor</AssemblyName>
+    <RootNamespace>FfxiMacros.App</RootNamespace>
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    A self-contained build carries the whole runtime, which is 90 MB of which the app uses a small
+    fraction. Trimming drops what is never called, compression packs what is left, and the ICU
+    tables go because every comparison in this code is ordinal or invariant — the interface is
+    French, but that is fonts and literal strings, not collation data.
+  -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EventSourceSupport>false</EventSourceSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+
+    <!--
+      The one trim warning left is the built-in COM activator, which the Win32 backend needs for
+      OLE drag and drop. It warns because a COM *server* cannot be trimmed safely; this app only
+      consumes COM, so the warning is noted rather than fatal — turning COM support off instead
+      would take drag and drop with it.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2026</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.3" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FfxiMacros.Core\FfxiMacros.Core.csproj" />
+  </ItemGroup>
+
+</Project>

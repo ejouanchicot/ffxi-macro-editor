@@ -1,0 +1,10 @@
+# Source and documentation are normalised to LF in the repository, whatever the checkout.
+* text=auto eol=lf
+
+# The macro fixtures are compared byte for byte, and a 0x0D or 0x0A inside a macro line is data.
+# Without this, end-of-line normalisation would silently rewrite them on checkout.
+*.dat binary
+*.ttl binary
+*.sys binary
+*.exe binary
+*.png binary

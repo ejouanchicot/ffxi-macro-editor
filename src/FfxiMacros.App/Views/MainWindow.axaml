@@ -1,0 +1,412 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:FfxiMacros.App.ViewModels"
+        xmlns:text="using:FfxiMacros.Core.Text"
+        x:Class="FfxiMacros.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="FFXI Macro Editor"
+        Width="1620" Height="900"
+        WindowStartupLocation="CenterScreen"
+        MinWidth="1020" MinHeight="640"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}" />
+    <KeyBinding Gesture="F5" Command="{Binding ReloadCommand}" />
+    <KeyBinding Gesture="Ctrl+PageUp" Command="{Binding PreviousSetCommand}" />
+    <KeyBinding Gesture="Ctrl+PageDown" Command="{Binding NextSetCommand}" />
+    <KeyBinding Gesture="Ctrl+Space" Command="{Binding TogglePhrasesCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel LastChildFill="True">
+
+    <!--
+      ===================================================================== header
+      The window chrome is extended so the app owns this strip. The right side is
+      left clear for the system's minimise / maximise / close buttons.
+    -->
+    <Border DockPanel.Dock="Top" Classes="header" Padding="18,0" Height="46"
+            PointerPressed="OnHeaderPressed">
+      <!--
+        Everything is laid out left to right: identity, then the two panels you can summon.
+        Right-aligned content in this strip would sit under the system's caption buttons.
+      -->
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+                  Background="Transparent">
+        <Border Classes="badge">
+          <TextBlock Text="FM" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentText}" />
+        </Border>
+        <TextBlock Text="FFXI Macro Editor" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,13" />
+        <Button Content="{DynamicResource Header.Search}" Classes="ghost" Command="{Binding ToggleSearchCommand}"
+                ToolTip.Tip="{DynamicResource Header.Search.Tip}" />
+        <Button Content="{DynamicResource Header.Phrases}" Classes="accent" Command="{Binding TogglePhrasesCommand}"
+                ToolTip.Tip="{DynamicResource Header.Phrases.Tip}" />
+
+        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,13" />
+
+        <!-- The interface language. English by default; the choice is remembered. -->
+        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center"
+                    ToolTip.Tip="{DynamicResource Header.Language.Tip}">
+          <Button Content="EN" Classes="ghost lang" Classes.current="{Binding IsEnglish}"
+                  Command="{Binding SetLanguageCommand}" CommandParameter="en" />
+          <Button Content="FR" Classes="ghost lang" Classes.current="{Binding IsFrench}"
+                  Command="{Binding SetLanguageCommand}" CommandParameter="fr" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ============================== a character is in game and owns its current book -->
+    <Border DockPanel.Dock="Top" Classes="notice" IsVisible="{Binding ShowGameRunningBanner}">
+      <StackPanel Spacing="8" HorizontalAlignment="Left" MaxWidth="1100">
+        <TextBlock Text="{Binding GameRunningWarning}" TextWrapping="Wrap" />
+        <Button Content="{DynamicResource Notice.RecheckGame}" Command="{Binding RecheckGameCommand}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ===================================== confirmation for a book copy or move -->
+    <Border DockPanel.Dock="Top" Classes="notice" IsVisible="{Binding HasPendingBookOperation}">
+      <StackPanel Spacing="8" HorizontalAlignment="Left" MaxWidth="1100">
+        <TextBlock Text="{Binding PendingBookOperation.Question}" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Content="{DynamicResource Notice.Confirm}" Classes="accent" Command="{Binding ConfirmBookOperationCommand}" />
+          <Button Content="{DynamicResource Notice.Cancel}" Command="{Binding CancelBookOperationCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ========================================================= status bar -->
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0" Padding="18,8">
+      <DockPanel LastChildFill="True">
+        <TextBlock DockPanel.Dock="Right" Text="{Binding UserFolder}" Classes="caption"
+                   Margin="12,0,0,0" MaxWidth="380" TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding UserFolder}" />
+        <TextBlock DockPanel.Dock="Left" Text="{Binding DirtySummary}" Classes="caption"
+                   Margin="0,0,14,0" />
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="12"
+                   Classes.error="{Binding StatusIsError}" />
+      </DockPanel>
+    </Border>
+
+    <!-- ============================================================== panes -->
+    <Grid ColumnDefinitions="240,6,*,Auto,Auto" Margin="16,14,16,14">
+
+      <!--
+        Left: the library. The actions that change what is listed live here rather than in a
+        toolbar at the top, because that is what they act on.
+      -->
+      <Border Grid.Column="0" Classes="panel">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,13,12,10">
+            <TextBlock Grid.Column="0" Text="{DynamicResource Books.Title}" Classes="section" />
+            <CheckBox Grid.Column="1" Content="{DynamicResource Books.ShowEmpty}" IsChecked="{Binding ShowEmptyBooks}" FontSize="11"
+                      ToolTip.Tip="{DynamicResource Books.ShowEmpty.Tip}" />
+          </Grid>
+
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0"
+                  Padding="10,10">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="{DynamicResource Books.ChooseFolder}" Classes="ghost" Command="{Binding ChooseFolderCommand}" />
+              <Button Content="{DynamicResource Books.Refresh}" Classes="ghost" Command="{Binding RefreshCommand}" />
+            </StackPanel>
+          </Border>
+
+          <TreeView ItemsSource="{Binding Characters}"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                    SelectedItem="{Binding SelectedNode}"
+                    Background="Transparent" BorderThickness="0" Margin="6,0,6,4">
+            <TreeView.Styles>
+              <Style Selector="TreeViewItem" x:DataType="vm:TreeNodeViewModel">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                <Setter Property="MinHeight" Value="0" />
+              </Style>
+            </TreeView.Styles>
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:TreeNodeViewModel">
+                <!--
+                  Number chip, name, set count. The chip is tinted by the job the book leads with,
+                  so a run down the list reads as bands of colour rather than forty similar words.
+                -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4" Background="Transparent"
+                      Opacity="{Binding RowOpacity}" DragDrop.AllowDrop="True"
+                      ToolTip.Tip="{Binding Detail}">
+                  <Border Grid.Column="0" Classes="rowBadge" Background="{Binding BadgeBackground}">
+                    <TextBlock Text="{Binding Badge}" Foreground="{Binding BadgeForeground}" />
+                  </Border>
+                  <TextBlock Grid.Column="1" Text="{Binding Header}" FontSize="12.5" Margin="9,0,0,0"
+                             FontWeight="{Binding HeaderWeight}"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding Trailing}" Classes="counter"
+                             Margin="8,0,0,0" ToolTip.Tip="{DynamicResource Books.SetsUsed.Tip}" />
+                  <Ellipse Grid.Column="3" Width="6" Height="6" Fill="{DynamicResource Warn}"
+                           VerticalAlignment="Center" Margin="7,0,2,0"
+                           IsVisible="{Binding IsDirty}" ToolTip.Tip="{DynamicResource Books.Dirty.Tip}" />
+                </Grid>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
+
+      <!-- Centre: the set being edited. -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+
+        <Border Grid.Row="0" Classes="panel" Margin="0,0,0,12">
+          <DockPanel>
+
+            <!-- The set's own actions, next to the set they act on. -->
+            <StackPanel DockPanel.Dock="Top" Margin="16,13,16,12" Spacing="10">
+              <TextBlock Text="{Binding CurrentSetTitle}" Classes="title" TextTrimming="CharacterEllipsis" />
+              <WrapPanel Orientation="Horizontal" IsVisible="{Binding HasCurrentSet}">
+                <WrapPanel.Styles>
+                  <Style Selector="WrapPanel > :is(Control)">
+                    <Setter Property="Margin" Value="0,2,6,2" />
+                  </Style>
+                </WrapPanel.Styles>
+                <Button Content="{DynamicResource Set.Save}" Classes="accent" Command="{Binding SaveCommand}" ToolTip.Tip="{DynamicResource Set.Save.Tip}" />
+                <Button Content="{DynamicResource Set.SaveAll}" Classes="ghost" Command="{Binding SaveAllCommand}"
+                        ToolTip.Tip="{DynamicResource Set.SaveAll.Tip}" />
+                <Button Content="{DynamicResource Set.Reload}" Classes="ghost" Command="{Binding ReloadCommand}"
+                        ToolTip.Tip="{DynamicResource Set.Reload.Tip}" />
+                <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,4" />
+                <Button Content="{DynamicResource Set.Repair}" Classes="ghost" Command="{Binding RepairCommand}"
+                        ToolTip.Tip="{DynamicResource Set.Repair.Tip}" />
+                <Button Content="{DynamicResource Set.Export}" Classes="ghost" Command="{Binding ExportSetCommand}"
+                        ToolTip.Tip="{DynamicResource Set.Export.Tip}" />
+                <Button Content="{DynamicResource Set.Import}" Classes="ghost" Command="{Binding ImportSetCommand}"
+                        ToolTip.Tip="{DynamicResource Set.Import.Tip}" />
+              </WrapPanel>
+            </StackPanel>
+
+            <TextBlock Text="{DynamicResource Set.PickBook}" Classes="caption" Margin="16,0,16,16"
+                       IsVisible="{Binding !HasCurrentBook}" />
+
+            <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding HasCurrentBook}">
+
+                <!--
+                  The sets in the order the game's up/down arrows walk them: from set 1, up reaches
+                  10, 9, 8, 7 and down reaches 2, 3, 4… Set 1 is framed, because that is the set
+                  players anchor on when they park quick macros on 10 and 2 either side of it.
+                -->
+                <ItemsControl Grid.Column="0" ItemsSource="{Binding CurrentSetWheel}" Margin="12,0,6,14"
+                              ToolTip.Tip="{DynamicResource Set.Wheel.Tip}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SetNodeViewModel">
+                      <Button Classes="tab" Classes.current="{Binding IsCurrent}" Classes.home="{Binding IsHome}"
+                              Width="56"
+                              Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).SelectSetCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="{Binding Detail}">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Grid.Column="0" Text="{Binding Header}" FontSize="11.5"
+                                     HorizontalAlignment="Center" Opacity="{Binding TabOpacity}" />
+                          <Ellipse Grid.Column="1" Width="5" Height="5" Fill="{DynamicResource Warn}"
+                                   VerticalAlignment="Center" IsVisible="{Binding IsDirty}" />
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!--
+                  ItemsControl rather than ListBox: a ListBox wraps its panel in a ScrollViewer that
+                  measures with unlimited width, which lets a 10-column UniformGrid grow past the
+                  pane. Selection is driven by the view model, which also makes the highlight explicit.
+                -->
+                <!--
+                  An empty probe sharing the cell with the palette. A UniformGrid reports the width
+                  its widest child asks for rather than the width it was offered, so the ten columns
+                  would run off the pane; the probe holds no content, so it reports the cell's real
+                  width, and the palette is clamped to it.
+                -->
+                <Border x:Name="PaletteSpace" Grid.Column="1" Margin="0,0,12,14" IsHitTestVisible="False" />
+
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding CurrentSet.Macros}"
+                              MaxWidth="{Binding #PaletteSpace.Bounds.Width}"
+                              HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,12,14"
+                              IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HasCurrentSet}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <UniformGrid Rows="2" Columns="10" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MacroSlotViewModel">
+                      <Button Classes="slot" Classes.current="{Binding IsSelected}"
+                              Classes.empty="{Binding IsEmpty}"
+                              Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).SelectMacroCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="{Binding Preview}"
+                              DragDrop.AllowDrop="True">
+                        <Button.ContextMenu>
+                          <ContextMenu>
+                            <MenuItem Header="{DynamicResource Editor.Copy}" Click="OnCopyMacro" />
+                            <MenuItem Header="{DynamicResource Editor.Paste}" Click="OnPasteMacro" />
+                            <Separator />
+                            <MenuItem Header="{DynamicResource Editor.Clear}" Command="{Binding ClearCommand}" />
+                          </ContextMenu>
+                        </Button.ContextMenu>
+                        <DockPanel LastChildFill="True">
+                          <Border DockPanel.Dock="Top" Classes="key" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding SlotLabel}" FontSize="9" FontFamily="{DynamicResource Mono}"
+                                       Foreground="{DynamicResource TextFaint}" />
+                          </Border>
+                          <TextBlock Text="{Binding DisplayName}" FontSize="12.5" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                     Opacity="{Binding NameOpacity}" />
+                        </DockPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </Grid>
+          </DockPanel>
+        </Border>
+
+        <!-- macro editor -->
+        <Border Grid.Row="1" Classes="panel" IsVisible="{Binding HasSelectedMacro}">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <!--
+              A ContentControl with a template, rather than a panel whose DataContext changes:
+              switching macro then builds fresh text boxes instead of reusing the old ones, which
+              would push the previous macro's text into the newly selected one.
+            -->
+            <ContentControl Content="{Binding SelectedMacro}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate x:DataType="vm:MacroSlotViewModel">
+
+                  <!-- A line holds 60 characters; a wider field would only be harder to read. -->
+                  <StackPanel Margin="20,18" Spacing="10" MaxWidth="860" HorizontalAlignment="Left">
+
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,4">
+                      <Border Grid.Column="0" Classes="slotBadge">
+                        <TextBlock Text="{Binding SlotLabel}" FontSize="12" FontWeight="SemiBold"
+                                   FontFamily="{DynamicResource Mono}" Foreground="{DynamicResource AccentText}" />
+                      </Border>
+                      <TextBox Grid.Column="1" Text="{Binding Name}" Classes="field" Margin="12,0,0,0"
+                               GotFocus="OnMacroFieldFocused"
+                               Classes.invalid="{Binding HasNameError}" Watermark="{DynamicResource Editor.NameWatermark}" />
+                      <TextBlock Grid.Column="2" Text="{Binding NameCounter}" Classes="counter"
+                                 Width="46" Margin="10,0,0,0" />
+                      <Button Grid.Column="3" Content="{DynamicResource Editor.Clear}" Classes="ghost" Command="{Binding ClearCommand}"
+                              Margin="6,0,0,0" />
+                    </Grid>
+                    <TextBlock Text="{Binding NameError}" Classes="error" IsVisible="{Binding HasNameError}"
+                               TextWrapping="Wrap" Margin="56,0,0,0" />
+
+                    <ItemsControl ItemsSource="{Binding Lines}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MacroLineViewModel">
+                          <StackPanel Spacing="3" Margin="0,0,0,7">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                              <Border Grid.Column="0" Classes="lineNumber">
+                                <TextBlock Text="{Binding Label}" FontSize="10.5"
+                                           Foreground="{DynamicResource TextFaint}" />
+                              </Border>
+                              <TextBox Grid.Column="1" Text="{Binding Text}" Classes="field" Margin="12,0,0,0"
+                                       GotFocus="OnMacroFieldFocused"
+                                       Classes.invalid="{Binding HasError}" />
+                              <TextBlock Grid.Column="2" Text="{Binding Counter}" Classes="counter"
+                                         Width="46" Margin="10,0,0,0" />
+                            </Grid>
+                            <TextBlock Text="{Binding Error}" Classes="error" IsVisible="{Binding HasError}"
+                                       TextWrapping="Wrap" Margin="56,0,0,0" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                  </StackPanel>
+
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+          </ScrollViewer>
+        </Border>
+
+      </Grid>
+
+      <!-- auto-translate phrase picker -->
+      <Border Grid.Column="3" Classes="panel" Width="264" Margin="12,0,0,0"
+              IsVisible="{Binding PhrasePanelOpen}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,13,10,10">
+            <TextBlock Grid.Column="0" Text="{DynamicResource Phrases.Title}" Classes="section" />
+            <Button Grid.Column="1" Content="✕" Classes="ghost" Command="{Binding TogglePhrasesCommand}"
+                    ToolTip.Tip="{DynamicResource Phrases.Close.Tip}" />
+          </Grid>
+
+          <StackPanel DockPanel.Dock="Top" Margin="12,0,12,8" Spacing="6">
+            <TextBox Name="PhraseSearchBox" Text="{Binding PhraseQuery}"
+                     Watermark="{DynamicResource Phrases.Watermark}" />
+            <CheckBox Content="{DynamicResource Phrases.IncludeItems}" IsChecked="{Binding PhraseIncludeItems}"
+                      FontSize="11" ToolTip.Tip="{DynamicResource Phrases.IncludeItems.Tip}" />
+            <TextBlock Text="{Binding PhraseSummary}" Classes="caption" />
+          </StackPanel>
+
+          <TextBlock DockPanel.Dock="Bottom" Classes="caption" Margin="16,6,16,14" TextWrapping="Wrap"
+                     Text="{DynamicResource Phrases.Hint}" />
+
+          <ListBox ItemsSource="{Binding PhraseResults}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   Background="Transparent" BorderThickness="0" Margin="6,0,6,4">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="text:AutoTranslateDictionary+Phrase">
+                <Button Classes="phrase" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).InsertPhraseCommand}"
+                        CommandParameter="{Binding}" ToolTip.Tip="{Binding Escape}">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <Border Classes="tag" IsVisible="{Binding IsItem}">
+                      <TextBlock Text="{DynamicResource Phrases.Item}" FontSize="9.5" Foreground="{DynamicResource TextDim}" />
+                    </Border>
+                    <TextBlock Text="{Binding Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <!-- search results -->
+      <Border Grid.Column="4" Classes="panel" Width="300" Margin="12,0,0,0"
+              IsVisible="{Binding SearchPanelOpen}">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,13,10,10">
+            <TextBlock Grid.Column="0" Text="{DynamicResource Search.Title}" Classes="section" />
+            <Button Grid.Column="1" Content="✕" Classes="ghost" Command="{Binding ToggleSearchCommand}"
+                    ToolTip.Tip="{DynamicResource Search.Close.Tip}" />
+          </Grid>
+
+          <StackPanel DockPanel.Dock="Top" Margin="12,0,12,8" Spacing="6">
+            <TextBox Text="{Binding SearchQuery}" Watermark="{DynamicResource Search.Watermark}">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <TextBlock Text="{Binding SearchSummary}" Classes="caption" />
+          </StackPanel>
+
+          <ListBox ItemsSource="{Binding SearchResults}"
+                   SelectedItem="{Binding SelectedSearchResult}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   Background="Transparent" BorderThickness="0" Margin="6,0,6,4">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SearchHitViewModel">
+                <StackPanel Margin="2,4" Spacing="2">
+                  <TextBlock Text="{Binding Text}" FontSize="12" TextTrimming="CharacterEllipsis"
+                             FontFamily="{DynamicResource Mono}" />
+                  <TextBlock Text="{Binding Location}" Classes="caption" FontSize="10.5" TextWrapping="Wrap" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+    </Grid>
+  </DockPanel>
+</Window>

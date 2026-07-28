@@ -1,0 +1,24 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Sauvegardes de dossiers de personnages
+Backups/
+
+# Données de jeu copiées pour le développement : ne pas versionner un USER complet.
+# Les échantillons nécessaires aux tests sont dans tests/FfxiMacros.Tests/Samples/.
+/USER/
+
+# Build autonome publie avec :
+#   dotnet publish src/FfxiMacros.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+publish/
+
+# Notes de publication : elles contiennent la correspondance entre les noms réels et leurs
+# substituts, donc elles restent locales — les publier annulerait l'anonymisation.
+GITHUB.md
+
+# Brief de départ : document de travail personnel, pas de la documentation du projet.
+PROMPT_FFXI_Macro_Editor.md

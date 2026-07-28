@@ -1,0 +1,421 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="FfxiMacros.App.App"
+             RequestedThemeVariant="Dark">
+
+  <!--
+    One palette, defined once. Three surface levels give depth without hard borders everywhere:
+    the window sits behind the panels, the panels behind the controls you can act on.
+  -->
+  <Application.Resources>
+    <SolidColorBrush x:Key="Bg"            Color="#0D0F16" />
+    <SolidColorBrush x:Key="Surface"       Color="#171B26" />
+    <SolidColorBrush x:Key="SurfaceRaised" Color="#1F2434" />
+    <SolidColorBrush x:Key="SurfaceHover"  Color="#2A3145" />
+    <SolidColorBrush x:Key="Line"          Color="#262C3D" />
+    <SolidColorBrush x:Key="LineStrong"    Color="#39415A" />
+
+    <SolidColorBrush x:Key="Text"          Color="#E9ECF3" />
+    <SolidColorBrush x:Key="TextDim"       Color="#9BA5BA" />
+    <SolidColorBrush x:Key="TextFaint"     Color="#6E7891" />
+
+    <SolidColorBrush x:Key="Accent"        Color="#5B94F0" />
+    <SolidColorBrush x:Key="AccentSoft"    Color="#1A3055" />
+    <SolidColorBrush x:Key="AccentText"    Color="#A6C8FF" />
+
+    <SolidColorBrush x:Key="Warn"          Color="#E0A63C" />
+    <SolidColorBrush x:Key="WarnSoft"      Color="#231D12" />
+    <SolidColorBrush x:Key="WarnText"      Color="#D8C49B" />
+    <SolidColorBrush x:Key="Danger"        Color="#F2777A" />
+
+    <!-- The window is not a flat sheet: a slow top-to-bottom fade gives the panels something to
+         sit on, and keeps the largest area of the app from reading as a void. -->
+    <LinearGradientBrush x:Key="BgGradient" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Offset="0" Color="#151A28" />
+      <GradientStop Offset="0.55" Color="#0F1219" />
+      <GradientStop Offset="1" Color="#0B0D13" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="PanelGradient" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Offset="0" Color="#1B2030" />
+      <GradientStop Offset="1" Color="#151924" />
+    </LinearGradientBrush>
+
+    <FontFamily x:Key="Mono">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource BgGradient}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- ============================================================ typography -->
+
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Section labels and anything the eye should be able to skip. -->
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.counter">
+      <Setter Property="Foreground" Value="{DynamicResource TextFaint}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+
+    <!-- ============================================================== surfaces -->
+
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource PanelGradient}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+
+    <!-- The strip that replaces the system title bar. -->
+    <Style Selector="Border.header">
+      <Setter Property="Background" Value="{DynamicResource PanelGradient}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <!-- The app mark, and the key badge on a macro slot: small tinted squares. -->
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.badge > TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.slotBadge">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="MinWidth" Value="56" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.slotBadge > TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The Ctrl-1 / Alt-0 tag in the corner of a macro slot. -->
+    <Style Selector="Border.key">
+      <Setter Property="Background" Value="#00000000" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+
+    <!-- The line number down the left of the editor. -->
+    <Style Selector="Border.lineNumber">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="16,0,0,0" />
+    </Style>
+
+    <Style Selector="Border.lineNumber > TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A small neutral label, e.g. "objet" beside a phrase. -->
+    <Style Selector="Border.tag">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="5,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Panel headings: small, spaced, quiet. -->
+    <Style Selector="TextBlock.section">
+      <Setter Property="Foreground" Value="{DynamicResource TextFaint}" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.bar">
+      <Setter Property="Background" Value="{DynamicResource Surface}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    </Style>
+
+    <!-- A notice that needs attention without shouting. -->
+    <Style Selector="Border.notice">
+      <Setter Property="Background" Value="{DynamicResource WarnSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Warn}" />
+      <Setter Property="BorderThickness" Value="3,1,1,1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,11" />
+      <Setter Property="Margin" Value="16,12,16,0" />
+    </Style>
+
+    <!-- Warm ink instead of full white: the banner is context, not the work. -->
+    <Style Selector="Border.notice TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WarnText}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- ================================================== the library rows -->
+
+    <!-- The chip at the head of a book row, tinted by the job the book leads with. -->
+    <Style Selector="Border.rowBadge">
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="MinWidth" Value="26" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.rowBadge > TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+    </Style>
+
+    <!-- =============================================================== buttons -->
+
+    <Style Selector="Button">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="11,6" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+      <Setter Property="TextBlock.Foreground" Value="{DynamicResource Text}" />
+    </Style>
+
+    <Style Selector="Button:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+
+    <Style Selector="Button:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextFaint}" />
+    </Style>
+
+    <!-- The one action a row is really about. -->
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    </Style>
+
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1D3A62" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+
+    <!-- Borderless, for close buttons and list rows. -->
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+      <Setter Property="Padding" Value="7,3" />
+    </Style>
+
+    <!-- ================================================== sets and macro slots -->
+
+    <Style Selector="Button.tab, Button.slot">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Margin" Value="2.5" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Button.tab">
+      <Setter Property="Padding" Value="6,6" />
+    </Style>
+
+    <Style Selector="Button.slot">
+      <Setter Property="Padding" Value="7,7" />
+      <Setter Property="Height" Value="54" />
+    </Style>
+
+    <Style Selector="Button.empty /template/ ContentPresenter">
+      <Setter Property="Background" Value="#12151E" />
+      <Setter Property="BorderBrush" Value="#1E2331" />
+    </Style>
+
+    <!-- Set 1: the set players anchor on, framed so its neighbours read at a glance. -->
+    <Style Selector="Button.home /template/ ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Warn}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <Style Selector="Button.current /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <Style Selector="Button.current /template/ ContentPresenter TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    </Style>
+
+    <!-- The EN / FR pair: small, quiet, and unmistakable about which one is on. -->
+    <Style Selector="Button.lang">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinWidth" Value="32" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- A row in the phrase picker. -->
+    <Style Selector="Button.phrase">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Padding" Value="8,5" />
+    </Style>
+
+    <Style Selector="Button.phrase:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+    <!-- ================================================================ inputs -->
+
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaised}" />
+    </Style>
+
+    <!-- Macro text is code: monospaced, so spaces and columns line up. -->
+    <Style Selector="TextBox.field">
+      <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- A field whose text cannot be encoded into its fixed-size slot. -->
+    <Style Selector="TextBox.invalid /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource Danger}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="7,0,0,0" />
+    </Style>
+
+    <!-- ================================================================= lists -->
+
+    <Style Selector="TreeViewItem">
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="4,1" />
+    </Style>
+
+    <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="2.5,0,0,0" />
+    </Style>
+
+    <Style Selector="TreeViewItem:selected TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    </Style>
+
+    <Style Selector="TreeViewItem:pointerover /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
+    </Style>
+
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+    <!-- Slim scrollbars: forty books scroll often, and the bar should not be part of the design. -->
+    <Style Selector="ScrollBar">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ScrollBar:vertical">
+      <Setter Property="Width" Value="9" />
+    </Style>
+
+    <Style Selector="ScrollBar:horizontal">
+      <Setter Property="Height" Value="9" />
+    </Style>
+
+    <Style Selector="ScrollBar /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource LineStrong}" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <Style Selector="ScrollBar /template/ Thumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TextFaint}" />
+    </Style>
+
+  </Application.Styles>
+
+</Application>

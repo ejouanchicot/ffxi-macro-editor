@@ -1,0 +1,57 @@
+using FfxiMacros.Core.Io;
+
+namespace FfxiMacros.Core.Discovery;
+
+/// <summary>One of the 40 macro books of a character: a title plus its 10 sets.</summary>
+public sealed class BookInfo
+{
+    internal BookInfo(int number, CharacterFolder character)
+    {
+        Number = number;
+        Character = character;
+        Sets = Enumerable.Range(1, MacroFileNaming.SetsPerBook)
+            .Select(set => new MacroSetInfo(MacroFileNaming.FileIndex(number, set), character.Path))
+            .ToArray();
+    }
+
+    /// <summary>1-based book number, 1..40.</summary>
+    public int Number { get; }
+
+    public CharacterFolder Character { get; }
+
+    public MacroSetInfo[] Sets { get; }
+
+    /// <summary>Title from <c>mcr.ttl</c> / <c>mcr_2.ttl</c>, falling back to the game's own placeholder.</summary>
+    public string Title
+    {
+        get
+        {
+            string stored = Character.Titles[Number];
+            return string.IsNullOrEmpty(stored) ? BookTitleSet.DefaultTitle(Number) : stored;
+        }
+        set => Character.Titles[Number] = value;
+    }
+
+    /// <summary>True when the stored title is empty or still the <c>BookNN</c> placeholder.</summary>
+    public bool IsUntitled =>
+        string.IsNullOrEmpty(Character.Titles[Number])
+        || string.Equals(Character.Titles[Number], BookTitleSet.DefaultTitle(Number), StringComparison.Ordinal);
+
+    public bool Exists => Sets.Any(s => s.Exists);
+
+    public int SetCount => Sets.Count(s => s.Exists);
+
+    public DateTime LastWriteUtc =>
+        Sets.Where(s => s.Exists).Select(s => s.LastWriteUtc).DefaultIfEmpty(DateTime.MinValue).Max();
+
+    /// <summary>Set 1..10 of this book.</summary>
+    public MacroSetInfo Set(int setNumber)
+    {
+        if (setNumber is < 1 or > MacroFileNaming.SetsPerBook)
+            throw new ArgumentOutOfRangeException(nameof(setNumber), setNumber,
+                $"Set must be 1..{MacroFileNaming.SetsPerBook}.");
+        return Sets[setNumber - 1];
+    }
+
+    public override string ToString() => $"Book {Number}: {Title} ({SetCount} set(s))";
+}
