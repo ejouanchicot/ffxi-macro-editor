@@ -33,24 +33,28 @@
       The window chrome is extended so the app owns this strip. The right side is
       left clear for the system's minimise / maximise / close buttons.
     -->
-    <Border DockPanel.Dock="Top" Classes="header" Padding="18,0" Height="46"
+    <Border DockPanel.Dock="Top" Classes="header" Padding="18,0" Height="84"
             PointerPressed="OnHeaderPressed">
       <!--
         Everything is laid out left to right: identity, then the two panels you can summon.
         Right-aligned content in this strip would sit under the system's caption buttons.
       -->
-      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+      <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center"
                   Background="Transparent">
-        <!-- The application's own icon, rather than two letters standing in for it. -->
-        <Image Source="/Assets/icon.png" Width="26" Height="26" VerticalAlignment="Center" />
-        <TextBlock Text="FFXI Macro Editor" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,13" />
+        <!--
+          The application's own mark, at a size worth drawing. The strip is built around it rather
+          than the other way round. Only the height is given: the artwork is taller than it is wide,
+          and fixing both would either squash it or reserve a column of empty space beside it.
+        -->
+        <Image Source="/Assets/icon.png" Height="64" VerticalAlignment="Center" />
+        <TextBlock Text="FFXI Macro Editor" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,30" />
         <Button Content="{DynamicResource Header.Search}" Classes="ghost" Command="{Binding ToggleSearchCommand}"
                 ToolTip.Tip="{DynamicResource Header.Search.Tip}" />
         <Button Content="{DynamicResource Header.Phrases}" Classes="accent" Command="{Binding TogglePhrasesCommand}"
                 ToolTip.Tip="{DynamicResource Header.Phrases.Tip}" />
 
-        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,13" />
+        <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,30" />
 
         <!-- The interface language. English by default; the choice is remembered. -->
         <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center"

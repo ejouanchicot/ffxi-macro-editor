@@ -34,6 +34,7 @@ tools/**/*.log
 
 # Images sources fournies à la main pour fabriquer l'icône ; l'icône elle-même est versionnée.
 /ChatGPT Image*.png
+/Icone.png
 
 # Captures d'ecran de l'application, prises pour signaler un defaut : elles montrent des
 # macros reelles et ne documentent rien une fois le defaut corrige.
