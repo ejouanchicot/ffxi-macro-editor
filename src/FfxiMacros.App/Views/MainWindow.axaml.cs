@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using FfxiMacros.App.Localization;
 using FfxiMacros.App.ViewModels;
 
@@ -430,7 +431,7 @@ public partial class MainWindow : Window
 
             // Books overwrite ten files at once, so the drop only proposes the operation.
             case (BookNodeViewModel from, BookNodeViewModel to):
-                viewModel.RequestBookTransfer(from, to, move: !copy);
+                viewModel.RequestBookTransfer(from, to, swap: !copy);
                 break;
         }
     }
@@ -520,15 +521,48 @@ public partial class MainWindow : Window
     private void OnRenameNode(object? sender, RoutedEventArgs e) =>
         ViewModel?.BeginRename(NodeOf<TreeNodeViewModel>(sender));
 
-    /// <summary>Puts the caret in the box the moment the row swaps its label for one.</summary>
+    /// <summary>
+    /// Puts the caret in the box, all of it selected, the moment the row swaps its label for one.
+    /// </summary>
+    /// <remarks>
+    /// The box is built with the row and merely hidden, so being attached to the tree says nothing
+    /// about a rename starting — that was the whole bug: the focus was asked for once, at load, for
+    /// every row at once, and never again. What matters is the moment it becomes visible. Selecting
+    /// the whole name means typing replaces it, which is what renaming usually means.
+    /// </remarks>
     private static void OnRenameBoxShown(object? sender, VisualTreeAttachmentEventArgs e)
     {
         if (sender is not TextBox box)
             return;
 
-        box.Focus();
-        box.SelectAll();
+        box.PropertyChanged -= OnRenameBoxProperty;
+        box.PropertyChanged += OnRenameBoxProperty;
+
+        if (box.IsVisible)
+            TakeTheCaret(box);
     }
+
+    private static void OnRenameBoxProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Visual.IsVisibleProperty && sender is TextBox { IsVisible: true } box)
+            TakeTheCaret(box);
+    }
+
+    /// <summary>
+    /// Waits for the layout pass before reaching for the focus.
+    /// </summary>
+    /// <remarks>
+    /// A control that has just been made visible has not been arranged yet, and focusing something
+    /// of no size is quietly ignored.
+    /// </remarks>
+    private static void TakeTheCaret(TextBox box) =>
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                box.Focus();
+                box.SelectAll();
+            },
+            DispatcherPriority.Loaded);
 
     private void OnRenameKey(object? sender, KeyEventArgs e)
     {

@@ -58,6 +58,40 @@ public static class JobPalette
     public static IBrush ForegroundFor(string? title) =>
         RoleOf(title) is { } role ? Foregrounds[role] : NeutralForeground;
 
+    /// <summary>
+    /// The wash laid over a book's card: the role's colour, brighter at the top, and faint.
+    /// </summary>
+    /// <remarks>
+    /// Faint on purpose. Forty cards at full strength would be a chart rather than a list — at this
+    /// weight the colour is felt while scrolling and disappears when reading a name. The gradient
+    /// follows the light, so the tint does not flatten the relief it sits on.
+    /// </remarks>
+    public static IBrush WashFor(string? title) =>
+        RoleOf(title) is { } role ? Washes[role] : NeutralWash;
+
+    private static readonly Dictionary<string, IBrush> Washes = RoleColours.ToDictionary(
+        entry => entry.Key,
+        entry => Wash(entry.Value),
+        StringComparer.Ordinal);
+
+    private static readonly IBrush NeutralWash = Wash(Color.FromRgb(0x8E, 0x9A, 0xB4));
+
+    private static IBrush Wash(Color colour)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Relative),
+            EndPoint = new Avalonia.RelativePoint(0, 1, Avalonia.RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0x2A, colour.R, colour.G, colour.B), 0),
+                new GradientStop(Color.FromArgb(0x0E, colour.R, colour.G, colour.B), 1),
+            },
+        };
+
+        return brush.ToImmutable();
+    }
+
     private static Dictionary<string, IBrush> Build(byte alpha) =>
         RoleColours.ToDictionary(
             entry => entry.Key,

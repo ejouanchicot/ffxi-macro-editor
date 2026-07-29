@@ -35,6 +35,17 @@ public sealed class EditorSettings
     /// <summary>Interface language, <c>en</c> or <c>fr</c>. English until the user says otherwise.</summary>
     public string Language { get; set; } = "en";
 
+    /// <summary>
+    /// Whether a book's new title is also written into the memory of the client playing it.
+    /// </summary>
+    /// <remarks>
+    /// On by default, because without it a title changed while the character is in game shows up
+    /// only after a relog — and can be undone entirely when the client writes its own copy back to
+    /// disk on the way out. Turn it off to keep the editor strictly file-based; the rename then
+    /// still happens, it simply waits for the next login.
+    /// </remarks>
+    public bool WriteTitlesToGame { get; set; } = true;
+
 
     [JsonIgnore]
     public string? SourcePath { get; set; }

@@ -48,9 +48,15 @@ internal static class Strings
         ["Set.Reload.Tip"] = "F5 — discards the changes to this set",
         ["Set.Repair"] = "Repair",
         ["Set.Repair.Tip"] = "Fix the lines an older tool broke",
-        ["Set.Export"] = "Export",
-        ["Set.Export.Tip"] = "Export this set as .txt or .json",
-        ["Set.Import"] = "Import",
+        ["Book.BackupAll"] = "Back up everything",
+        ["Book.BackupAll.Tip"] = "Every set of every book of every character, and the titles, in one archive",
+        ["Book.Backup"] = "Back up this book",
+        ["Book.Backup.Tip"] = "Pack this book's own mcr*.dat files into one archive, byte for byte",
+        ["Book.Restore"] = "Restore",
+        ["Book.Restore.Tip"] = "Put such an archive back into this book, sets and title",
+        ["Set.Export"] = "Export text",
+        ["Set.Export.Tip"] = "Export as readable .txt or .json — for reading and sharing, not for keeping",
+        ["Set.Import"] = "Import text",
         ["Set.Import.Tip"] = "Import a .txt or .json into this set",
         ["Set.Title"] = "{0}   ·   Book {1} “{2}”   ·   Set {3}/10",
         ["Set.PickBook"] = "Pick a book from the list on the left.",
@@ -146,7 +152,11 @@ internal static class Strings
         ["Status.SetPasted"] = "Set {0} of book {1} replaced. Save to apply.",
         ["Status.SetCleared"] = "Set {0} of book {1} emptied. Save to apply, or reload to bring it back.",
         ["Status.SetAlreadyEmpty"] = "Set {0} of book {1} is already empty.",
-        ["Status.BookRenamed"] = "Book {0} is now “{1}”.",
+        ["Status.BookRenamed"] = "Book {0} is now “{1}”." + "",
+        ["Status.TitlesNotPushed"] = "The running client did not take the new names of {0}. It may write its own back over them: relog, or reorganise books from the character-select screen.",
+        ["Status.EverythingBackedUp"] = "{0} character(s), {1} file(s) backed up to {2}",
+        ["Status.BookBackedUp"] = "Book {0} backed up — {1} set file(s) — to {2}",
+        ["Status.BookRestored"] = "Book {0} “{1}” restored into book {2}: {3} set(s), the game's own files.",
         ["Status.BookTitleCleared"] = "Book {0} goes back to its own name, and the field is scrubbed.",
         ["Status.CharacterRenamed"] =
             "{0} is shown as “{1}” from now on. That is a label kept by the editor — the folder on "
@@ -167,7 +177,7 @@ internal static class Strings
         ["Status.ImportedOne"] = "One set imported from {0}. Save to apply.",
         ["Status.Imported"] = "{1} sets imported from {0}. Save to apply.",
         ["Status.Cancelled"] = "Operation cancelled.",
-        ["Status.BookMoved"] = "Book {0} moved onto book {1}.",
+        ["Status.BooksSwapped"] = "Books {0} and {1} swapped.",
         ["Status.BookCopied"] = "Book {0} copied onto book {1}.",
         ["Status.LanguageChanged"] = "Interface language: English.",
         ["Status.CloseWithChanges"] = "{0}. Save (Ctrl+S), or close the window again to quit without saving.",
@@ -191,13 +201,16 @@ internal static class Strings
             "the game will not find this folder: it looks a character up by the hexadecimal name it "
             + "gave the folder, so a renamed one is invisible to it",
         ["Book.Clear"] = "Empty this book",
+        ["Book.OpenInGameWarning"] =
+            "Careful: book {0} “{1}” is the one open in game right now. The client holds that one and "
+            + "writes its own copy back when it leaves it, so this would be undone. Switch book in game "
+            + "first, then do it. — ",
         ["Book.ClearQuestion"] =
             "Empty book {0} “{1}” of {2}? Its {3} set file(s) will be deleted and its title reset. "
             + "Nothing is kept in the editor — only the backup can bring it back.",
-        ["Book.MoveQuestion"] = "Move book {0} “{1}” from {2} onto book {3} “{4}” of {5}? ",
+        ["Book.SwapQuestion"] = "Swap book {0} “{1}” of {2} with book {3} “{4}” of {5}? They trade places — their macros and their names — and nothing is lost.",
         ["Book.CopyQuestion"] = "Copy book {0} “{1}” from {2} onto book {3} “{4}” of {5}? ",
         ["Book.Overwrites"] = "{0} set(s) of the destination book will be overwritten",
-        ["Book.SourceEmptied"] = ", and the source book will be emptied.",
         ["Book.End"] = ".",
         ["Book.NeedsSave"] =
             " First: {0} set(s) hold unsaved edits. Copying a book re-reads every file from disk, "
@@ -230,9 +243,15 @@ internal static class Strings
         ["Set.Reload.Tip"] = "F5 — annule les modifications de ce set",
         ["Set.Repair"] = "Réparer",
         ["Set.Repair.Tip"] = "Corriger les lignes cassées par un ancien outil",
-        ["Set.Export"] = "Exporter",
-        ["Set.Export.Tip"] = "Exporter ce set en .txt ou .json",
-        ["Set.Import"] = "Importer",
+        ["Book.BackupAll"] = "Tout sauvegarder",
+        ["Book.BackupAll.Tip"] = "Tous les sets de tous les books de tous les personnages, et les titres, dans une archive",
+        ["Book.Backup"] = "Sauvegarder ce book",
+        ["Book.Backup.Tip"] = "Empaqueter les fichiers mcr*.dat de ce book, octet pour octet, dans une archive",
+        ["Book.Restore"] = "Restaurer",
+        ["Book.Restore.Tip"] = "Remettre une telle archive dans ce book, sets et titre",
+        ["Set.Export"] = "Exporter texte",
+        ["Set.Export.Tip"] = "Exporter en .txt ou .json lisible — pour lire et partager, pas pour conserver",
+        ["Set.Import"] = "Importer texte",
         ["Set.Import.Tip"] = "Importer un .txt ou .json dans ce set",
         ["Set.Title"] = "{0}   ·   Book {1} « {2} »   ·   Set {3}/10",
         ["Set.PickBook"] = "Choisis un book dans la liste de gauche.",
@@ -328,7 +347,11 @@ internal static class Strings
         ["Status.SetPasted"] = "Set {0} du book {1} remplacé. Enregistre pour appliquer.",
         ["Status.SetCleared"] = "Set {0} du book {1} vidé. Enregistre pour appliquer, ou recharge pour le récupérer.",
         ["Status.SetAlreadyEmpty"] = "Le set {0} du book {1} est déjà vide.",
-        ["Status.BookRenamed"] = "Le book {0} s'appelle maintenant « {1} ».",
+        ["Status.BookRenamed"] = "Le book {0} s'appelle maintenant « {1} »." + "",
+        ["Status.TitlesNotPushed"] = "Le client en cours n'a pas pris les nouveaux noms de {0}. Il risque de réécrire les siens par-dessus : reconnecte-toi, ou réorganise les books depuis l'écran de sélection de personnage.",
+        ["Status.EverythingBackedUp"] = "{0} personnage(s), {1} fichier(s) sauvegardés vers {2}",
+        ["Status.BookBackedUp"] = "Book {0} sauvegardé — {1} fichier(s) de set — vers {2}",
+        ["Status.BookRestored"] = "Book {0} « {1} » restauré dans le book {2} : {3} set(s), les fichiers du jeu.",
         ["Status.BookTitleCleared"] = "Le book {0} reprend son nom d'origine, et le champ est nettoyé.",
         ["Status.CharacterRenamed"] =
             "{0} s'affiche désormais « {1} ». C'est une étiquette tenue par l'éditeur — le dossier sur "
@@ -349,7 +372,7 @@ internal static class Strings
         ["Status.ImportedOne"] = "Un set importé depuis {0}. Enregistre pour appliquer.",
         ["Status.Imported"] = "{1} sets importés depuis {0}. Enregistre pour appliquer.",
         ["Status.Cancelled"] = "Opération annulée.",
-        ["Status.BookMoved"] = "Book {0} déplacé vers le book {1}.",
+        ["Status.BooksSwapped"] = "Books {0} et {1} échangés.",
         ["Status.BookCopied"] = "Book {0} copié vers le book {1}.",
         ["Status.LanguageChanged"] = "Langue de l'interface : français.",
         ["Status.CloseWithChanges"] = "{0}. Enregistre (Ctrl+S), ou referme la fenêtre pour quitter sans enregistrer.",
@@ -373,13 +396,16 @@ internal static class Strings
             "le jeu ne trouvera pas ce dossier : il cherche un personnage par le nom hexadécimal qu'il "
             + "lui a donné, un dossier renommé lui est donc invisible",
         ["Book.Clear"] = "Vider ce book",
+        ["Book.OpenInGameWarning"] =
+            "Attention : le book {0} « {1} » est celui ouvert en jeu en ce moment. Le client le détient et "
+            + "réécrit sa propre copie en le quittant, ce qui annulerait l'opération. Change de book en jeu "
+            + "d'abord, puis recommence. — ",
         ["Book.ClearQuestion"] =
             "Vider le book {0} « {1} » de {2} ? Ses {3} fichier(s) de set seront supprimés et son titre "
             + "réinitialisé. Rien n'est gardé dans l'éditeur — seule la sauvegarde peut le ramener.",
-        ["Book.MoveQuestion"] = "Déplacer le book {0} « {1} » de {2} vers le book {3} « {4} » de {5} ? ",
+        ["Book.SwapQuestion"] = "Échanger le book {0} « {1} » de {2} avec le book {3} « {4} » de {5} ? Ils prennent la place l'un de l'autre — macros et noms — et rien n'est perdu.",
         ["Book.CopyQuestion"] = "Copier le book {0} « {1} » de {2} vers le book {3} « {4} » de {5} ? ",
         ["Book.Overwrites"] = "{0} set(s) du book de destination seront écrasés",
-        ["Book.SourceEmptied"] = ", et le book d'origine sera vidé.",
         ["Book.End"] = ".",
         ["Book.NeedsSave"] =
             " Avant ça : {0} set(s) ont des modifications non enregistrées. Copier un book relit tous "

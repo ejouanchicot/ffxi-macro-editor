@@ -26,6 +26,9 @@ public abstract class TreeNodeViewModel : ViewModelBase
 
     public virtual IBrush BadgeForeground => JobPalette.ForegroundFor(null);
 
+    /// <summary>The tint laid over a book's card, from the role of the job it leads with.</summary>
+    public virtual IBrush RowWash => Brushes.Transparent;
+
     /// <summary>A single figure at the end of the row: how many sets, how many books.</summary>
     public virtual string Trailing => "";
 
@@ -34,6 +37,12 @@ public abstract class TreeNodeViewModel : ViewModelBase
 
     /// <summary>Marks the book the game has this character on; never true for a character row.</summary>
     public virtual bool IsOpenInGame => false;
+
+    /// <summary>
+    /// True for a book, which the list draws as a card you press. A character is the heading above
+    /// its forty of them, and reads as one rather than competing with them.
+    /// </summary>
+    public virtual bool IsBook => false;
 
     /// <summary>Characters carry more weight than the books listed under them.</summary>
     public virtual FontWeight HeaderWeight => FontWeight.Normal;
@@ -46,6 +55,22 @@ public abstract class TreeNodeViewModel : ViewModelBase
         get => _isExpanded;
         set => SetField(ref _isExpanded, value);
     }
+
+    /// <summary>
+    /// The book whose macros are on screen.
+    /// </summary>
+    /// <remarks>
+    /// Carried by the node rather than read from the tree's selection: a style keyed on a selected
+    /// item also matches everything inside it, so selecting a character lit all forty of its books
+    /// at once. A row that knows whether it is the one being edited cannot make that mistake.
+    /// </remarks>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        internal set => SetField(ref _isCurrent, value);
+    }
+
+    private bool _isCurrent;
 
     /// <summary>
     /// Books carry a title of their own, written to <c>mcr.ttl</c> and read by the game; a character

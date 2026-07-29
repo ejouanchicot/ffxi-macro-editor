@@ -43,7 +43,14 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(CurrentSetTitle));
         OnPropertyChanged(nameof(GameStatusSummary));
         OnPropertyChanged(nameof(GameRunningWarning));
-        OnPropertyChanged(nameof(PendingBookOperation));
+        // The banner's question is a sentence built once, so switching language has to build it
+        // again: raising the property alone leaves the binding looking at the same object and the
+        // same text, which is how a French window kept asking its question in English.
+        if (_pendingBookOperation is { } pending)
+        {
+            PendingBookOperation = new PendingBookOperation(
+                pending.Kind, pending.Source, pending.Target, pending.UnsavedSets);
+        }
         OnPropertyChanged(nameof(ClipboardSummary));
 
         foreach (var character in Characters.OfType<CharacterNodeViewModel>())

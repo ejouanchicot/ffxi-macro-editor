@@ -40,6 +40,7 @@ internal static class Program
                 "follow" => Follow(args, Title(args)),
                 "dump" => Dump(args, Title(args)),
                 "signature" => Signature(args, Title(args)),
+                "titles" => Titles(args, Title(args)),
                 _ => Usage(),
             };
         }
@@ -323,6 +324,40 @@ internal static class Program
             }
 
             Thread.Sleep(250);
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Prints the forty book names the client is holding, from the address of its title table.
+    /// </summary>
+    /// <remarks>
+    /// What the game shows, and what it will write over <c>mcr.ttl</c> when it saves its state. Set
+    /// beside the file, it says which of the two is the one telling the truth.
+    /// </remarks>
+    private static int Titles(string[] args, string? title)
+    {
+        if (args.Length < 2 || !ulong.TryParse(args[1].TrimStart('0', 'x', 'X'), NumberStyles.HexNumber,
+                                               CultureInfo.InvariantCulture, out ulong table))
+        {
+            Console.Error.WriteLine("Needs the address of the first title, in hexadecimal.");
+            return 2;
+        }
+
+        int count = args.Length > 2 && int.TryParse(args[2], out int n) ? n : 10;
+        var client = Client(title);
+        var buffer = new byte[16];
+
+        for (int book = 1; book <= count; book++)
+        {
+            ulong at = table + (ulong)((book - 1) * 16);
+            if (!ReadProcessMemory(client.Handle, (IntPtr)at, buffer, buffer.Length, out int read) || read != 16)
+                break;
+
+            int end = Array.IndexOf(buffer, (byte)0);
+            string name = Encoding.ASCII.GetString(buffer, 0, end < 0 ? buffer.Length : end);
+            Console.WriteLine($"  book {book,2}  '{name}'");
         }
 
         return 0;

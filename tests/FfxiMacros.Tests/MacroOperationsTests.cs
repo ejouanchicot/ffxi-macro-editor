@@ -188,6 +188,63 @@ public class MacroOperationsTests : IDisposable
     }
 
     [Fact]
+    public void SwapBooks_ExchangesMacrosAndNames_LosingNothing()
+    {
+        // What dragging a book onto another does. Moving used to overwrite the destination and empty
+        // the source, which destroys a whole book of macros to relocate one — it cost a real book
+        // before it was changed.
+        _temp.AddCharacter("aaaa1", 0, 1, 290);       // book 1 has two sets, book 30 has one
+        _temp.AddTitles("aaaa1");
+        var character = Character("aaaa1");
+        string firstTitle = character.Book(1).Title;
+        string thirtiethTitle = character.Book(30).Title;
+
+        MacroOperations.SwapBooks(character.Book(1), character.Book(30));
+
+        Assert.Equal(1, character.Book(1).SetCount);
+        Assert.Equal(2, character.Book(30).SetCount);
+        Assert.Equal(thirtiethTitle, character.Book(1).Title);
+        Assert.Equal(firstTitle, character.Book(30).Title);
+
+        // And on disk, where the game reads it.
+        var reread = MacroLibrary.Scan(_temp.UserFolder).ById("aaaa1")!;
+        Assert.Equal(thirtiethTitle, reread.Book(1).Title);
+        Assert.Equal(firstTitle, reread.Book(30).Title);
+        Assert.Equal(1, reread.Book(1).SetCount);
+        Assert.Equal(2, reread.Book(30).SetCount);
+    }
+
+    [Fact]
+    public void SwapBooks_MovesASetAcrossWhenTheOtherSideHasNone()
+    {
+        // Set 2 exists on one side only: it has to end up on the other side and leave nothing
+        // behind, or the two books would not have traded places exactly.
+        _temp.AddCharacter("aaaa1", 0, 1);
+        _temp.AddTitles("aaaa1");
+        var character = Character("aaaa1");
+
+        MacroOperations.SwapBooks(character.Book(1), character.Book(9));
+
+        Assert.Equal(0, character.Book(1).SetCount);
+        Assert.Equal(2, character.Book(9).SetCount);
+        Assert.False(character.Book(1).Set(2).Exists);
+        Assert.True(character.Book(9).Set(2).Exists);
+    }
+
+    [Fact]
+    public void SwapBooks_WithItselfChangesNothing()
+    {
+        _temp.AddCharacter("aaaa1", 0);
+        _temp.AddTitles("aaaa1");
+        var character = Character("aaaa1");
+
+        MacroOperations.SwapBooks(character.Book(1), character.Book(1));
+
+        Assert.Equal(1, character.Book(1).SetCount);
+        Assert.Equal("ThfRdm", character.Book(1).Title);
+    }
+
+    [Fact]
     public void MoveBook_ClearsTheSourceCompletely()
     {
         _temp.AddCharacter("aaaa1", 0, 1);

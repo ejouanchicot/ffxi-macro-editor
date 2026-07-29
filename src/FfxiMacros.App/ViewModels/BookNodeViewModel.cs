@@ -48,6 +48,8 @@ public sealed class BookNodeViewModel : TreeNodeViewModel
 
     public override IBrush BadgeForeground => JobPalette.ForegroundFor(Info.Title);
 
+    public override IBrush RowWash => JobPalette.WashFor(Info.Title);
+
     // Almost every book carries its ten sets, so printing "10" forty times says nothing. The
     // figure appears only for the books that are partly filled — the ones worth noticing.
     public override string Trailing =>
@@ -101,6 +103,8 @@ public sealed class BookNodeViewModel : TreeNodeViewModel
     public override bool IsDirty => Sets.Any(s => s.IsDirty);
 
     public override bool CanRename => true;
+
+    public override bool IsBook => true;
 
     /// <summary>True when the book has no set file on disk and still carries its placeholder title.</summary>
     public bool IsEmptyAndUntitled => !Info.Exists && Info.IsUntitled;

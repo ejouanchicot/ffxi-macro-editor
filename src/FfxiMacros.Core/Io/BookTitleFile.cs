@@ -46,6 +46,16 @@ public sealed class BookTitleSet
     /// <summary>The placeholder FFXI itself writes for an untitled book, e.g. <c>Book07</c>.</summary>
     public static string DefaultTitle(int bookNumber) => $"Book{bookNumber:D2}";
 
+    /// <summary>
+    /// One title as the game stores it: the field, whole, terminator and padding included.
+    /// </summary>
+    /// <remarks>
+    /// The same sixteen bytes whether they are going into the file or straight into a running
+    /// client's memory. Encoding it in one place is what keeps those two from drifting apart.
+    /// </remarks>
+    public static byte[] EncodeTitle(string title, bool truncate = false) =>
+        FfxiText.Encode(title ?? "", TitleFieldSize, truncate);
+
     public static BookTitleSet Load(string path)
     {
         byte[] raw = LongPath.ReadAllBytes(path);

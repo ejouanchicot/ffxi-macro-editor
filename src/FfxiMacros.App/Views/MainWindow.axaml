@@ -140,7 +140,18 @@
                   Number chip, name, set count. The chip is tinted by the job the book leads with,
                   so a run down the list reads as bands of colour rather than forty similar words.
                 -->
-                <Grid ColumnDefinitions="7,Auto,*,Auto,Auto" Margin="0,4" Background="Transparent"
+                <!--
+                  The row draws its own hover: an ancestor must not light up with it. A book gets
+                  the full card treatment; a character stays a heading above them.
+                -->
+                <Border Classes="row" Classes.card="{Binding IsBook}" Classes.current="{Binding IsCurrent}">
+                <Panel>
+                <!--
+                  The job's colour, laid over the card rather than into it: the hover and the
+                  selection are painted underneath by styles, and still read through the tint.
+                -->
+                <Border Background="{Binding RowWash}" CornerRadius="9" IsHitTestVisible="False" />
+                <Grid ColumnDefinitions="7,Auto,*,Auto,Auto" Margin="0,3" Background="Transparent"
                       Opacity="{Binding RowOpacity}" DragDrop.AllowDrop="True"
                       ToolTip.Tip="{Binding Detail}">
                   <!--
@@ -153,6 +164,14 @@
                                 Click="OnCopyBook" />
                       <MenuItem Header="{DynamicResource Book.Paste}" InputGesture="Ctrl+V" Tag="paste"
                                 Click="OnPasteBook" />
+                      <Separator Tag="book" />
+                      <!--
+                        Text rather than the game's files: for posting a set on a forum, for putting
+                        macros under version control, and for a search-and-replace across a whole
+                        book that would take thirty edits by hand.
+                      -->
+                      <MenuItem Header="{DynamicResource Set.Export}" Tag="book" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ExportSetCommand}" />
+                      <MenuItem Header="{DynamicResource Set.Import}" Tag="book" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ImportSetCommand}" />
                       <Separator Tag="book" />
                       <MenuItem Header="{DynamicResource Book.Rename}" Tag="book" Click="OnRenameNode" />
                       <MenuItem Header="{DynamicResource Character.Rename}" Tag="character" Click="OnRenameNode" />
@@ -190,6 +209,8 @@
                            VerticalAlignment="Center" Margin="7,0,2,0"
                            IsVisible="{Binding IsDirty}" ToolTip.Tip="{DynamicResource Books.Dirty.Tip}" />
                 </Grid>
+                </Panel>
+                </Border>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
           </TreeView>
@@ -221,10 +242,13 @@
                 <Rectangle Width="1" Fill="{DynamicResource Line}" Margin="6,4" />
                 <Button Content="{DynamicResource Set.Repair}" Classes="ghost" Command="{Binding RepairCommand}"
                         ToolTip.Tip="{DynamicResource Set.Repair.Tip}" />
-                <Button Content="{DynamicResource Set.Export}" Classes="ghost" Command="{Binding ExportSetCommand}"
-                        ToolTip.Tip="{DynamicResource Set.Export.Tip}" />
-                <Button Content="{DynamicResource Set.Import}" Classes="ghost" Command="{Binding ImportSetCommand}"
-                        ToolTip.Tip="{DynamicResource Set.Import.Tip}" />
+                <!-- The game's own files: what you want when the point is to keep or move a book. -->
+                <Button Content="{DynamicResource Book.BackupAll}" Classes="ghost" Command="{Binding BackupEverythingCommand}"
+                        ToolTip.Tip="{DynamicResource Book.BackupAll.Tip}" />
+                <Button Content="{DynamicResource Book.Backup}" Classes="ghost" Command="{Binding BackupBookCommand}"
+                        ToolTip.Tip="{DynamicResource Book.Backup.Tip}" />
+                <Button Content="{DynamicResource Book.Restore}" Classes="ghost" Command="{Binding RestoreBookCommand}"
+                        ToolTip.Tip="{DynamicResource Book.Restore.Tip}" />
               </WrapPanel>
             </StackPanel>
 

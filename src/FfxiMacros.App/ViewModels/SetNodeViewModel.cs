@@ -13,7 +13,6 @@ namespace FfxiMacros.App.ViewModels;
 public sealed class SetNodeViewModel : TreeNodeViewModel
 {
     private bool _isDirty;
-    private bool _isCurrent;
     private int? _usedMacros;
 
     internal SetNodeViewModel(MacroSetInfo info, BookNodeViewModel parent)
@@ -89,12 +88,8 @@ public sealed class SetNodeViewModel : TreeNodeViewModel
     /// </summary>
     public bool IsHome => Info.SetNumber == 1;
 
-    /// <summary>Drives the highlight on the set tab.</summary>
-    public bool IsCurrent
-    {
-        get => _isCurrent;
-        internal set => SetField(ref _isCurrent, value);
-    }
+    // The highlight on the set tab is the node's own IsCurrent: a set being edited and a book being
+    // edited are the same idea, and were the same property written twice.
 
     public override bool IsDirty => _isDirty;
 

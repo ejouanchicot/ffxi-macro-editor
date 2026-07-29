@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>snapshot</AssemblyName>
+    <RootNamespace>FfxiMacros.Tools.Snapshot</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Headless with real drawing: the window is rendered by Skia into a bitmap, not stubbed out. -->
+    <PackageReference Include="Avalonia.Headless" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Skia" Version="11.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FfxiMacros.App\FfxiMacros.App.csproj" />
+    <ProjectReference Include="..\..\src\FfxiMacros.Core\FfxiMacros.Core.csproj" />
+  </ItemGroup>
+
+</Project>

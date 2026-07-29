@@ -318,7 +318,7 @@ public class EditingViewModelTests : IDisposable
         viewModel.RequestBookTransfer(
             character.Books.First(b => b.Info.Number == 1),
             character.Books.First(b => b.Info.Number == 9),
-            move: true);
+            swap: true);
         viewModel.ConfirmBookOperationCommand.Execute(null);
 
         var rebuilt = viewModel.Characters.OfType<CharacterNodeViewModel>().First();
@@ -550,6 +550,53 @@ public class EditingViewModelTests : IDisposable
 
         Assert.True(books.First(b => b.Info.Number == 23).IsOpenInGame);
         Assert.False(books.First(b => b.Info.Number == 7).IsOpenInGame);
+    }
+
+    [Fact]
+    public void SwappingTheBookOpenInGameIsWarnedAboutBeforeConfirming()
+    {
+        // The client holds that one book and writes it back from memory when it leaves it, so the
+        // swap would come apart a minute later. Said before the confirmation, not after.
+        _settings.SetName("aaaa1", "Tetsouo");
+        var viewModel = new MainWindowViewModel(_settings)
+        {
+            ProbeRunningClients = () => ["Tetsouo"],
+            ProbeOpenBooks = () => [new OpenBook("Tetsouo", "aaaa1", 9)],
+            LiveStateFolder = Path.Combine(_temp.Root, "live"),
+        };
+        viewModel.Initialize();
+        viewModel.ReadOpenBooks();
+
+        var character = viewModel.Characters.OfType<CharacterNodeViewModel>().First(c => c.Character.Id == "aaaa1");
+        viewModel.RequestBookTransfer(
+            character.Books.First(b => b.Info.Number == 1),
+            character.Books.First(b => b.Info.Number == 9),
+            swap: true);
+
+        Assert.True(viewModel.PendingBookOperation!.HasWarning);
+        Assert.Contains("open in game", viewModel.PendingBookOperation.Question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SwappingBooksTheGameIsNotOnCarriesNoWarning()
+    {
+        _settings.SetName("aaaa1", "Tetsouo");
+        var viewModel = new MainWindowViewModel(_settings)
+        {
+            ProbeRunningClients = () => ["Tetsouo"],
+            ProbeOpenBooks = () => [new OpenBook("Tetsouo", "aaaa1", 40)],
+            LiveStateFolder = Path.Combine(_temp.Root, "live"),
+        };
+        viewModel.Initialize();
+        viewModel.ReadOpenBooks();
+
+        var character = viewModel.Characters.OfType<CharacterNodeViewModel>().First(c => c.Character.Id == "aaaa1");
+        viewModel.RequestBookTransfer(
+            character.Books.First(b => b.Info.Number == 1),
+            character.Books.First(b => b.Info.Number == 9),
+            swap: true);
+
+        Assert.False(viewModel.PendingBookOperation!.HasWarning);
     }
 
     [Fact]
@@ -1003,7 +1050,7 @@ public class EditingViewModelTests : IDisposable
         var source = character.Books.First(b => b.Info.Number == 1);
         var target = character.Books.First(b => b.Info.Number == 9);
 
-        viewModel.RequestBookTransfer(source, target, move: false);
+        viewModel.RequestBookTransfer(source, target, swap: false);
 
         Assert.True(viewModel.HasPendingBookOperation);
         Assert.Equal(0, target.Info.SetCount);       // nothing written yet
@@ -1018,7 +1065,7 @@ public class EditingViewModelTests : IDisposable
         viewModel.RequestBookTransfer(
             character.Books.First(b => b.Info.Number == 1),
             character.Books.First(b => b.Info.Number == 9),
-            move: false);
+            swap: false);
 
         viewModel.ConfirmBookOperationCommand.Execute(null);
 
@@ -1035,7 +1082,7 @@ public class EditingViewModelTests : IDisposable
         var viewModel = NewViewModel();
         var character = viewModel.Characters.OfType<CharacterNodeViewModel>().First();
         var target = character.Books.First(b => b.Info.Number == 9);
-        viewModel.RequestBookTransfer(character.Books.First(b => b.Info.Number == 1), target, move: false);
+        viewModel.RequestBookTransfer(character.Books.First(b => b.Info.Number == 1), target, swap: false);
 
         viewModel.CancelBookOperationCommand.Execute(null);
 
@@ -1053,7 +1100,7 @@ public class EditingViewModelTests : IDisposable
         viewModel.RequestBookTransfer(
             character.Books.First(b => b.Info.Number == 1),
             character.Books.First(b => b.Info.Number == 9),
-            move: false);
+            swap: false);
 
         Assert.True(viewModel.HasPendingBookOperation);
         Assert.True(viewModel.PendingBookOperation!.NeedsSave);
@@ -1166,7 +1213,7 @@ public class EditingViewModelTests : IDisposable
         var viewModel = NewViewModel("Kaelith");
         var character = viewModel.Characters.OfType<CharacterNodeViewModel>().First();
         var target = character.Books.First(b => b.Info.Number == 9);
-        viewModel.RequestBookTransfer(character.Books.First(b => b.Info.Number == 1), target, move: false);
+        viewModel.RequestBookTransfer(character.Books.First(b => b.Info.Number == 1), target, swap: false);
 
         viewModel.ConfirmBookOperationCommand.Execute(null);
 

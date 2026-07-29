@@ -141,6 +141,68 @@ public static class MacroOperations
         log.Info($"Copied book {source.Number} of {source.Character.Id} to book {target.Number} of {target.Character.Id}.");
     }
 
+    /// <summary>
+    /// Exchanges two books: their sets and their titles trade places.
+    /// </summary>
+    /// <remarks>
+    /// What dragging a book onto another now does, and what dragging a macro onto another has always
+    /// done. Moving used to mean « overwrite the destination and empty the source », which destroys
+    /// a book to relocate one — an entire book of macros could be lost to a gesture that reads as
+    /// rearranging. An exchange loses nothing: whatever was in the way is now where the other came
+    /// from.
+    /// </remarks>
+    public static void SwapBooks(BookInfo a, BookInfo b, IMacroLog? log = null)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        if (SameBook(a, b))
+            return;
+
+        for (int set = 1; set <= MacroFileNaming.SetsPerBook; set++)
+            SwapSets(a.Set(set), b.Set(set), log);
+
+        // What the field holds, not what the game shows: an untitled book reads as "Book07", and
+        // swapping that would hand the other book a placeholder as a real name.
+        (a.Character.Titles[a.Number], b.Character.Titles[b.Number]) =
+            (b.Character.Titles[b.Number], a.Character.Titles[a.Number]);
+
+        a.Character.Titles.SaveHalfFor(a.Number);
+        b.Character.Titles.SaveHalfFor(b.Number);
+
+        log.Info($"Swapped book {a.Number} of {a.Character.Id} with book {b.Number} of {b.Character.Id}.");
+    }
+
+    /// <summary>
+    /// Exchanges one pair of set files, whether or not both exist.
+    /// </summary>
+    /// <remarks>
+    /// Both are read before either is written, so a set is never half-swapped: the bytes of each are
+    /// in hand by the time the first one is replaced. A set that exists on one side only moves
+    /// across and leaves nothing behind, which is what makes the two books trade places exactly.
+    /// </remarks>
+    private static void SwapSets(MacroSetInfo x, MacroSetInfo y, IMacroLog? log)
+    {
+        if (!x.Exists && !y.Exists)
+            return;
+
+        byte[]? left = x.Exists ? LongPath.ReadAllBytes(x.FullPath) : null;
+        byte[]? right = y.Exists ? LongPath.ReadAllBytes(y.FullPath) : null;
+
+        if (right is not null)
+            LongPath.WriteAllBytesAtomic(x.FullPath, right);
+        else
+            DeleteSet(x, log);
+
+        if (left is not null)
+            LongPath.WriteAllBytesAtomic(y.FullPath, left);
+        else
+            DeleteSet(y, log);
+
+        x.Refresh();
+        y.Refresh();
+    }
+
     /// <summary>Copies a book, then clears the source: its set files are deleted and its title reset.</summary>
     public static void MoveBook(BookInfo source, BookInfo target, IMacroLog? log = null)
     {

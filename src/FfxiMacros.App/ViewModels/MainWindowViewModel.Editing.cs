@@ -32,14 +32,29 @@ public enum ClipboardKind
 public enum BookOperationKind
 {
     Copy,
-    Move,
+
+    /// <summary>The two books trade places. Nothing is lost, which is why dragging does this.</summary>
+    Swap,
     Clear,
 }
 
 /// <summary>What a pending book operation would do, waiting for the user to confirm it.</summary>
 public sealed class PendingBookOperation(
-    BookOperationKind kind, BookNodeViewModel source, BookNodeViewModel? target, int unsavedSets)
+    BookOperationKind kind, BookNodeViewModel source, BookNodeViewModel? target, int unsavedSets,
+    string warning = "")
 {
+    /// <summary>
+    /// Said before the question when one of the books is the one a client has open.
+    /// </summary>
+    /// <remarks>
+    /// That book is the only one the client holds: it rewrites it from memory when it leaves it, so
+    /// whatever the editor puts there is undone a minute later. Worth knowing before confirming
+    /// rather than after wondering why the swap did not take.
+    /// </remarks>
+    public string Warning { get; } = warning;
+
+    public bool HasWarning => Warning.Length > 0;
+
     public BookOperationKind Kind { get; } = kind;
 
     /// <summary>The book being copied, moved or emptied.</summary>
@@ -48,7 +63,7 @@ public sealed class PendingBookOperation(
     /// <summary>Where it goes — null when the book is simply being emptied.</summary>
     public BookNodeViewModel? Target { get; } = target;
 
-    public bool Move => Kind == BookOperationKind.Move;
+    public bool Swap => Kind == BookOperationKind.Swap;
 
     /// <summary>
     /// Sets holding edits when the operation was asked for.
@@ -62,17 +77,21 @@ public sealed class PendingBookOperation(
 
     public bool NeedsSave => UnsavedSets > 0;
 
-    public string Question => Transfer + (NeedsSave ? Loc.T("Book.NeedsSave", UnsavedSets) : "");
+    public string Question => Warning + Transfer + (NeedsSave ? Loc.T("Book.NeedsSave", UnsavedSets) : "");
 
     private string Transfer =>
         Kind == BookOperationKind.Clear || Target is not { } target
             ? Loc.T("Book.ClearQuestion",
                     Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label, Source.Info.SetCount)
-            : Loc.T(Move ? "Book.MoveQuestion" : "Book.CopyQuestion",
-                    Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label,
-                    target.Info.Number, target.Info.Title, target.Parent.Character.Label)
-              + Loc.T("Book.Overwrites", target.Info.SetCount)
-              + Loc.T(Move ? "Book.SourceEmptied" : "Book.End");
+            : Swap
+                ? Loc.T("Book.SwapQuestion",
+                        Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label,
+                        target.Info.Number, target.Info.Title, target.Parent.Character.Label)
+                : Loc.T("Book.CopyQuestion",
+                        Source.Info.Number, Source.Info.Title, Source.Parent.Character.Label,
+                        target.Info.Number, target.Info.Title, target.Parent.Character.Label)
+                  + Loc.T("Book.Overwrites", target.Info.SetCount)
+                  + Loc.T("Book.End");
 }
 
 public sealed partial class MainWindowViewModel
@@ -356,7 +375,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        RequestBookTransfer(LiveBook(_bookClipboard), target, move: false);
+        RequestBookTransfer(LiveBook(_bookClipboard), target, swap: false);
     }
 
     /// <summary>
@@ -463,6 +482,123 @@ public sealed partial class MainWindowViewModel
     private AsyncRelayCommand? _importSetCommand;
     public AsyncRelayCommand ImportSetCommand =>
         _importSetCommand ??= new AsyncRelayCommand(ImportSetAsync, () => _currentSet?.IsLoaded == true);
+
+    // ---------------------------------------------------------------- archives of the real files
+
+    private AsyncRelayCommand? _backupBookCommand;
+
+    /// <summary>Packs the current book's own <c>mcr*.dat</c> files, byte for byte, into one archive.</summary>
+    public AsyncRelayCommand BackupBookCommand =>
+        _backupBookCommand ??= new AsyncRelayCommand(BackupBookAsync, () => _currentBook is not null);
+
+    private AsyncRelayCommand? _restoreBookCommand;
+
+    /// <summary>Puts such an archive back into the current book.</summary>
+    public AsyncRelayCommand RestoreBookCommand =>
+        _restoreBookCommand ??= new AsyncRelayCommand(RestoreBookAsync, () => _currentBook is not null);
+
+    private AsyncRelayCommand? _backupEverythingCommand;
+
+    /// <summary>Packs every macro file of every character into one archive.</summary>
+    public AsyncRelayCommand BackupEverythingCommand =>
+        _backupEverythingCommand ??= new AsyncRelayCommand(BackupEverythingAsync, () => _library is not null);
+
+    /// <summary>
+    /// The whole library in one file: every set of every book of every character, and the titles.
+    /// </summary>
+    /// <remarks>
+    /// What you want before a reorganisation, as against the per-book archive which is for moving
+    /// one book around. The editor also copies a character aside on its own before its first write
+    /// of a session — this is the same protection, asked for deliberately and put where you choose.
+    /// </remarks>
+    private async Task BackupEverythingAsync()
+    {
+        if (_library is null || SaveFileAsync is null)
+            return;
+
+        string suggested = $"ffxi-macros-{DateTime.Now:yyyyMMdd-HHmm}";
+        string? path = await SaveFileAsync(suggested + MacroArchive.FileExtension, MacroArchive.FileExtension);
+        if (path is null)
+            return;
+
+        try
+        {
+            int files = MacroArchive.ExportEverything(_library.Characters, path, _log);
+            SetStatus(Loc.T("Status.EverythingBackedUp", _library.Characters.Count, files, path));
+        }
+        catch (MacroFileException ex)
+        {
+            SetStatus(ex.ToString(), error: true);
+        }
+    }
+
+    /// <summary>
+    /// Writes the book as the game's own files rather than as text.
+    /// </summary>
+    /// <remarks>
+    /// The text and JSON exports are for reading a macro or sending one to someone. This is for
+    /// keeping: every byte the game wrote, version stamp and reserved bytes included, plus the book
+    /// title, so restoring it puts things back exactly rather than approximately.
+    /// </remarks>
+    private async Task BackupBookAsync()
+    {
+        if (_currentBook is not { } book || SaveFileAsync is null)
+            return;
+
+        string suggested = $"{book.Parent.Character.Id}-book{book.Info.Number}-{Safe(book.Info.Title)}";
+        string? path = await SaveFileAsync(suggested + MacroArchive.FileExtension, MacroArchive.FileExtension);
+        if (path is null)
+            return;
+
+        try
+        {
+            int sets = MacroArchive.Export(book.Info, path, _log);
+            SetStatus(Loc.T("Status.BookBackedUp", book.Info.Number, sets, path));
+        }
+        catch (MacroFileException ex)
+        {
+            SetStatus(ex.ToString(), error: true);
+        }
+    }
+
+    /// <summary>
+    /// Restores an archive into the book on screen, after saying what it holds and what it replaces.
+    /// </summary>
+    private async Task RestoreBookAsync()
+    {
+        if (_currentBook is not { } book || OpenFileAsync is null)
+            return;
+
+        string? path = await OpenFileAsync(MacroArchive.FileExtension);
+        if (path is null)
+            return;
+
+        try
+        {
+            var contents = MacroArchive.Read(path);
+            if (!MayWriteToDisk())
+                return;
+
+            BackupOnce(book.Parent.Character);
+            string was = book.Info.Title;
+            int restored = MacroArchive.Import(path, book.Info, keepTargetTitle: false, log: _log);
+
+            PushTitleToGame(book, was);
+            SetStatus(Loc.T("Status.BookRestored", contents.Book, contents.Title, book.Info.Number, restored));
+            ReloadAfterFileChange();
+        }
+        catch (MacroFileException ex)
+        {
+            SetStatus(ex.ToString(), error: true);
+        }
+    }
+
+    /// <summary>A book title as a file name: the title is the player's, the file system's rules are not.</summary>
+    private static string Safe(string title)
+    {
+        var cleaned = title.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '-' : c).ToArray();
+        return new string(cleaned).Trim();
+    }
 
     /// <summary>
     /// Exports the whole book — every set that exists on disk, in one file.
@@ -654,10 +790,12 @@ public sealed partial class MainWindowViewModel
             if (!MayWriteToDisk())
                 return;
 
+            string before = book.Info.Title;
             BackupOnce(book.Parent.Character);
             MacroOperations.RenameBook(book.Info, title, _log);
             book.IsRenaming = false;
             book.RefreshUpwards();
+            PushTitleToGame(book, before);
 
             SetStatus((clearing
                           ? Loc.T("Status.BookTitleCleared", book.Info.Number)
@@ -732,10 +870,14 @@ public sealed partial class MainWindowViewModel
         _cancelBookOperationCommand ??= new RelayCommand(() => { PendingBookOperation = null; SetStatus(Loc.T("Status.Cancelled")); });
 
     /// <summary>
-    /// A dropped or pasted book is never applied straight away: copying a book overwrites ten files,
-    /// so the user is shown exactly what will happen and has to confirm.
+    /// A dropped or pasted book is never applied straight away: it rewrites twenty files, so the
+    /// user is shown exactly what will happen and has to confirm.
     /// </summary>
-    public void RequestBookTransfer(BookNodeViewModel source, BookNodeViewModel target, bool move)
+    /// <param name="swap">
+    /// True for a drag, which exchanges the two books; false for a paste, which overwrites the
+    /// target with a copy.
+    /// </param>
+    public void RequestBookTransfer(BookNodeViewModel source, BookNodeViewModel target, bool swap)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
@@ -747,7 +889,7 @@ public sealed partial class MainWindowViewModel
         // reads as « nothing happened » to anyone whose eyes are on the book they just clicked.
         // The operation is proposed either way; the banner then asks for the save it needs.
         Propose(new PendingBookOperation(
-            move ? BookOperationKind.Move : BookOperationKind.Copy, source, target, DirtyCount));
+            swap ? BookOperationKind.Swap : BookOperationKind.Copy, source, target, DirtyCount));
     }
 
     /// <summary>
@@ -770,8 +912,33 @@ public sealed partial class MainWindowViewModel
 
     private void Propose(PendingBookOperation operation)
     {
-        PendingBookOperation = operation;
-        SetStatus(operation.Question, error: operation.NeedsSave);
+        // Re-made with whatever the running clients say, since the answer is only known here.
+        var warned = new PendingBookOperation(
+            operation.Kind, operation.Source, operation.Target, operation.UnsavedSets,
+            WarnIfOpenInGame(operation.Source, operation.Target));
+
+        PendingBookOperation = warned;
+        SetStatus(warned.Question, error: warned.NeedsSave || warned.HasWarning);
+    }
+
+    /// <summary>
+    /// Names the book a client has open, when the operation is about to touch it.
+    /// </summary>
+    /// <remarks>
+    /// The client holds exactly one book — the one on screen — and writes it back from memory when
+    /// it leaves it. Anything the editor puts there in the meantime is quietly undone. Now that the
+    /// editor knows which book that is, it can say so before the confirmation rather than let the
+    /// player find out when their swap comes apart.
+    /// </remarks>
+    private string WarnIfOpenInGame(BookNodeViewModel source, BookNodeViewModel? target)
+    {
+        foreach (var book in new[] { source, target }.OfType<BookNodeViewModel>())
+        {
+            if (OpenBookFor(book.Parent.Character) is { } open && open.Book == book.Info.Number)
+                return Loc.T("Book.OpenInGameWarning", book.Info.Number, book.Info.Title);
+        }
+
+        return "";
     }
 
     private void SaveAllThenConfirm()
@@ -801,25 +968,35 @@ public sealed partial class MainWindowViewModel
             {
                 // Emptying a book deletes files: the backup is the only way back, so it comes first.
                 BackupOnce((operation.Target ?? operation.Source).Parent.Character);
-                if (operation.Move || operation.Kind == BookOperationKind.Clear)
+                if (operation.Swap || operation.Kind == BookOperationKind.Clear)
                     BackupOnce(operation.Source.Parent.Character);
             }
+
+            // What the client has in memory for the books about to change: the write that follows
+            // has to prove it is replacing what it thinks it is.
+            string sourceWas = operation.Source.Info.Title;
+            string? targetWas = operation.Target?.Info.Title;
 
             if (operation.Target is not { } target)
             {
                 MacroOperations.ClearBook(operation.Source.Info, _log);
+                PushTitleToGame(operation.Source, sourceWas);
                 SetStatus(Loc.T("Status.BookCleared", operation.Source.Info.Number));
             }
             else
             {
-                if (operation.Move)
+                if (operation.Swap)
                 {
-                    MacroOperations.MoveBook(operation.Source.Info, target.Info, _log);
-                    }
+                    MacroOperations.SwapBooks(operation.Source.Info, target.Info, _log);
+                    PushTitleToGame(operation.Source, sourceWas);
+                }
                 else
+                {
                     MacroOperations.CopyBook(operation.Source.Info, target.Info, keepTargetTitle: false, log: _log);
+                }
 
-                SetStatus(Loc.T(operation.Move ? "Status.BookMoved" : "Status.BookCopied",
+                PushTitleToGame(target, targetWas ?? "");
+                SetStatus(Loc.T(operation.Swap ? "Status.BooksSwapped" : "Status.BookCopied",
                                 operation.Source.Info.Number, target.Info.Number));
             }
         }
@@ -832,6 +1009,51 @@ public sealed partial class MainWindowViewModel
             PendingBookOperation = null;
             ReloadAfterFileChange();
         }
+    }
+
+    /// <summary>
+    /// Puts a book's new title into the client playing that character, when one is running.
+    /// </summary>
+    /// <remarks>
+    /// The client reads the titles at login and works from its own copy, so a rename, a copy, a
+    /// move or an emptying would otherwise wait for a relog to show — and could be undone entirely
+    /// when the client writes that copy back to disk on its way out. The write is refused unless
+    /// the field still holds <paramref name="was"/>, and it never reaches past those sixteen bytes.
+    /// </remarks>
+    private void PushTitleToGame(BookNodeViewModel book, string was)
+    {
+        if (!_settings.WriteTitlesToGame || string.Equals(was, book.Info.Title, StringComparison.Ordinal))
+            return;
+
+        // All forty, not the one that changed. A single write can be refused — the client having
+        // moved on, a field no longer holding what was expected — and the two copies then disagree
+        // until the client flushes its own over the file. That is how a shelf of swapped books
+        // ended up wearing each other's names.
+        SyncTitlesWithGame(book.Parent.Character);
+    }
+
+    /// <summary>
+    /// Makes the running client's title table say exactly what the disk says, and says so when it
+    /// could not.
+    /// </summary>
+    /// <remarks>
+    /// A refused push used to be silent, and silence was the worst possible answer: the names were
+    /// on disk, they looked right in the editor, and the client put its own back over them the next
+    /// time it saved. Whoever is reorganising books needs to hear it while they still remember what
+    /// they did — and the way out is one sentence long.
+    /// </remarks>
+    private void SyncTitlesWithGame(CharacterFolder character)
+    {
+        if (!_settings.WriteTitlesToGame)
+            return;
+
+        if (_memory.TrySyncTitles(character.Id, [.. character.Titles.All], _log))
+            return;
+
+        // No client at all is the ordinary case and nothing to report. A client that is running and
+        // was not written to is the case that eats book names.
+        if (ProbeRunningClients().Count > 0)
+            SetStatus(Loc.T("Status.TitlesNotPushed", character.Label), error: true);
     }
 
     /// <summary>Re-reads the folder from disk after files moved underneath us.</summary>

@@ -137,8 +137,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         get => _currentBook;
         private set
         {
+            var previous = _currentBook;
             if (SetField(ref _currentBook, value))
             {
+                if (previous is not null)
+                    previous.IsCurrent = false;
+                if (value is not null)
+                    value.IsCurrent = true;
+
                 OnPropertyChanged(nameof(CurrentSets));
                 OnPropertyChanged(nameof(CurrentSetWheel));
                 OnPropertyChanged(nameof(HasCurrentBook));
@@ -606,6 +612,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         RepairCommand.RaiseCanExecuteChanged();
         ExportSetCommand.RaiseCanExecuteChanged();
         ImportSetCommand.RaiseCanExecuteChanged();
+        BackupBookCommand.RaiseCanExecuteChanged();
+        BackupEverythingCommand.RaiseCanExecuteChanged();
+        RestoreBookCommand.RaiseCanExecuteChanged();
     }
 
     private void TrySaveSettings()

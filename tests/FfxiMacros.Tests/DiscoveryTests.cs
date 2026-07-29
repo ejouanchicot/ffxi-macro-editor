@@ -108,21 +108,36 @@ public class DiscoveryTests
     // ---------------------------------------------------------------- scanning
 
     [Fact]
-    public void Scan_ListsCharactersByName_AndStillKnowsWhoWasPlayedLast()
+    public void Scan_PutsTheMainCharacterFirst_AndStillKnowsWhoWasPlayedLast()
     {
-        // The order has to hold still: with two clients running, sorting by the most recent write
-        // reshuffled the list under the user on every refresh. Who was played last is a question
-        // the library still answers — it just no longer decides the order.
+        // The order has to hold still and to be useful: sorting by the most recent write reshuffled
+        // the list while two clients were running, and sorting by name buried the character with
+        // four hundred macros under an alt with six. Who was played last is a question the library
+        // still answers — it just no longer decides the order.
         using var temp = new TempUserFolder();
-        temp.AddCharacter("aaaa1", 0);
-        temp.AddCharacter("bbbb2", 0);
-        temp.Touch("aaaa1", 0, new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+        temp.AddCharacter("aaaa1", 0, 1, 2);        // three sets: the main
+        temp.AddCharacter("bbbb2", 0);              // one: an alt
+        foreach (int file in new[] { 0, 1, 2 })
+            temp.Touch("aaaa1", file, new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
         temp.Touch("bbbb2", 0, new DateTime(2026, 5, 5, 12, 0, 0, DateTimeKind.Utc));
 
         var library = MacroLibrary.Scan(temp.UserFolder);
 
         Assert.Equal(["aaaa1", "bbbb2"], library.Characters.Select(c => c.Id));
         Assert.Equal("bbbb2", library.MostRecent!.Id);
+    }
+
+    [Fact]
+    public void Scan_FallsBackToTheNameWhenTwoCharactersHoldAsMuch()
+    {
+        using var temp = new TempUserFolder();
+        temp.AddCharacter("zzzz9", 0);
+        temp.AddCharacter("aaaa1", 0);
+
+        var library = MacroLibrary.Scan(temp.UserFolder);
+
+        Assert.Equal(["aaaa1", "zzzz9"], library.Characters.Select(c => c.Id));
     }
 
     [Fact]

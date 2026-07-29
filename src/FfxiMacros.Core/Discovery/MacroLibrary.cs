@@ -90,9 +90,15 @@ public sealed class MacroLibrary
             }
         }
 
-        // By name, not by when they were last written: two clients running keep rewriting their
-        // books, and a list that reorders itself under the cursor is unusable.
-        characters.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
+        // The character you actually play comes first, and stays first: the one with the most macro
+        // files is the main, and that count does not change from one minute to the next. Sorting by
+        // the most recent write put whichever client had just flushed at the top, so the list
+        // reshuffled itself while playing; sorting by name buried the main under an alt.
+        characters.Sort((a, b) =>
+        {
+            int bySize = b.SetFileCount.CompareTo(a.SetFileCount);
+            return bySize != 0 ? bySize : string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase);
+        });
         log.Info($"{resolved}: {characters.Count} character(s), {characters.Sum(c => c.SetFileCount)} macro set file(s).");
 
         return new MacroLibrary(resolved, characters);
