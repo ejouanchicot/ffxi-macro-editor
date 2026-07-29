@@ -453,15 +453,34 @@
       <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
     </Style>
 
-    <!-- The macro drawn under the cursor while it travels. -->
-    <Style Selector="Border.ghost">
-      <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    <!-- A book being carried: the row is left as a hollow, exactly as a macro slot is. -->
+    <Style Selector="Border.row.card.dragging">
+      <Setter Property="Opacity" Value="0.25" />
+    </Style>
+
+    <!-- Where it would land, answered before the button is released. -->
+    <Style Selector="Border.row.card.dropTarget">
+      <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!--
+      What travels under the cursor is a picture of the thing itself, so the shadow that lifts it
+      off the page is all these have to add. A background of their own would sit behind the rounded
+      corners and square them off; padding would inset the picture inside its own outline.
+    -->
+    <Style Selector="Border.ghostCard, Border.ghostSlot">
+      <Setter Property="Opacity" Value="0.95" />
+      <Setter Property="BoxShadow" Value="0 12 28 0 #A6000000" />
+    </Style>
+
+    <Style Selector="Border.ghostCard">
+      <Setter Property="CornerRadius" Value="9" />
+    </Style>
+
+    <Style Selector="Border.ghostSlot">
       <Setter Property="CornerRadius" Value="7" />
-      <Setter Property="Padding" Value="7" />
-      <Setter Property="Opacity" Value="0.93" />
-      <Setter Property="BoxShadow" Value="0 10 26 0 #99000000" />
     </Style>
 
     <!-- Set 1: the set players anchor on, framed so its neighbours read at a glance. -->

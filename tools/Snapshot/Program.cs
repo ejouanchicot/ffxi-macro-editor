@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.VisualTree;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 
@@ -87,7 +89,28 @@ internal static class Program
 
         window.Show();
         Settle();
+        Console.WriteLine($"  render scaling: {window.RenderScaling}");
         Save(window, Path.Combine(output, "window.png"));
+
+        // The gesture itself, caught mid-flight: press on a book, move far enough to lift it, and
+        // photograph the window while the card is in hand. Nothing else shows what is carried, and
+        // « what I grab is not whole » is a sentence no amount of reading the code answers.
+        var cards = window.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.DataContext is BookNodeViewModel && b.Classes.Contains("card"))
+            .ToList();
+
+        Console.WriteLine($"  {cards.Count} card(s) realised; "
+                          + string.Join(", ", cards.Take(3).Select(c => $"{c.Bounds}")));
+
+        DragAndPhotograph(window, output, "drag-book.png", cards.FirstOrDefault());
+
+        // The realistic case: a book well down the list, where the row sits far into a scrolled
+        // panel and its own offset is no longer a couple of pixels.
+        DragAndPhotograph(window, output, "drag-book-low.png", cards.Skip(11).FirstOrDefault());
+
+        DragAndPhotograph(window, output, "drag-macro.png",
+                          window.GetVisualDescendants().OfType<Button>()
+                              .FirstOrDefault(b => b.DataContext is MacroSlotViewModel));
 
         // The macro editor filled in, which is where most of the reading happens.
         viewModel.SelectedMacro = viewModel.CurrentSet?.Macros.FirstOrDefault(m => !m.IsEmpty);
@@ -149,10 +172,60 @@ internal static class Program
             Settle();
         }
 
+        // What a dragged thing looks like while it travels: the picture taken of the card and of the
+        // slot, on their own. A ghost cropped or shifted is only visible here.
+        if (window.GetVisualDescendants().OfType<Border>()
+                .FirstOrDefault(b => b.DataContext is BookNodeViewModel && b.Classes.Contains("card")) is { } card)
+        {
+            SavePicture(card, Path.Combine(output, "ghost-book.png"));
+        }
+
+        if (window.GetVisualDescendants().OfType<Button>()
+                .FirstOrDefault(b => b.DataContext is MacroSlotViewModel) is { } slot)
+        {
+            SavePicture(slot, Path.Combine(output, "ghost-macro.png"));
+        }
+
         // And the phrase picker open, the widest the window ever gets.
         viewModel.TogglePhrasesCommand.Execute(null);
         Settle();
         Save(window, Path.Combine(output, "phrases.png"));
+    }
+
+    /// <summary>Lifts something with the pointer and photographs the window while it is in hand.</summary>
+    private static void DragAndPhotograph(Window window, string output, string name, Control? source)
+    {
+        if (source?.TranslatePoint(new Point(source.Bounds.Width / 2, source.Bounds.Height / 2), window)
+            is not { } grab)
+        {
+            Console.Error.WriteLine($"  nothing to drag for {name}");
+            return;
+        }
+
+        window.MouseDown(grab, MouseButton.Left);
+        Pump();
+
+        // Past the threshold first, then a real distance: the lift happens on the first move that
+        // counts as one, and the picture wants the card well clear of the row it came from.
+        foreach (var step in new[] { new Point(8, 12), new Point(30, 90), new Point(60, 170) })
+        {
+            window.MouseMove(grab + step, RawInputModifiers.LeftMouseButton);
+            Pump();
+        }
+
+        Settle();
+        Save(window, Path.Combine(output, name));
+
+        window.MouseMove(grab, RawInputModifiers.LeftMouseButton);
+        Pump();
+        window.MouseUp(grab, MouseButton.Left);
+        Settle();
+    }
+
+    private static void Pump()
+    {
+        for (int i = 0; i < 4; i++)
+            Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>Lets layout, styles and the first frame settle before the picture is taken.</summary>
@@ -176,6 +249,26 @@ internal static class Program
 
         frame.Save(path);
         Console.WriteLine($"  {Path.GetFileName(path)}  {frame.PixelSize.Width}x{frame.PixelSize.Height}");
+    }
+
+    /// <summary>
+    /// Renders one control on its own, exactly as the window does when it is picked up.
+    /// </summary>
+    /// <remarks>
+    /// Rendering a control renders it where it sits in its parent — its own Bounds position is part
+    /// of the drawing, so the frame has to reach the far edge and the offset is cropped off after.
+    /// This is the same arithmetic the window uses to draw a carried thing; getting it wrong is
+    /// invisible on a screen at 100%, where every scale involved is one.
+    /// </remarks>
+    private static void SavePicture(Control source, string path)
+    {
+        var bounds = source.Bounds;
+        var size = new PixelSize((int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom));
+        Console.WriteLine($"  {Path.GetFileName(path)}  bounds {bounds}");
+
+        using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
+        bitmap.Render(source);
+        bitmap.Save(path);
     }
 
     /// <summary>A throwaway USER tree holding the sample macro files, as the tests build one.</summary>

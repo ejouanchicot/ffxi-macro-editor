@@ -870,8 +870,53 @@ public sealed partial class MainWindowViewModel
         _cancelBookOperationCommand ??= new RelayCommand(() => { PendingBookOperation = null; SetStatus(Loc.T("Status.Cancelled")); });
 
     /// <summary>
-    /// A dropped or pasted book is never applied straight away: it rewrites twenty files, so the
-    /// user is shown exactly what will happen and has to confirm.
+    /// True when a book could be moved without anything having to be asked first.
+    /// </summary>
+    /// <remarks>
+    /// Two things stop a drag: edits that the reload would throw away, and a book one of the
+    /// clients has open — which it rewrites from memory on the way out, undoing whatever was put
+    /// there. Neither is a refusal; both are a question, and the answer belongs to the player.
+    /// The view asks this before it animates, so a move is never shown happening and then undone.
+    /// </remarks>
+    public bool CanTransferBookAtOnce(BookNodeViewModel source, BookNodeViewModel target)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+
+        return !ReferenceEquals(source, target)
+               && DirtyCount == 0
+               && WarnIfOpenInGame(source, target).Length == 0;
+    }
+
+    /// <summary>
+    /// Carries out a dragged book, or puts the question when something has to be asked first.
+    /// </summary>
+    /// <remarks>
+    /// Dragging a book used to stop at a banner every single time, because it used to overwrite the
+    /// book underneath and there was no way back. It swaps now — nothing is lost, and dragging it
+    /// back puts everything where it was — so the ordinary case goes through as directly as a macro
+    /// does. What still stops it is what could genuinely be lost.
+    /// </remarks>
+    public void TransferBook(BookNodeViewModel source, BookNodeViewModel target, bool swap)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (!CanTransferBookAtOnce(source, target))
+        {
+            RequestBookTransfer(source, target, swap);
+            return;
+        }
+
+        PendingBookOperation = new PendingBookOperation(
+            swap ? BookOperationKind.Swap : BookOperationKind.Copy, source, target, unsavedSets: 0);
+
+        ConfirmBookOperation();
+    }
+
+    /// <summary>
+    /// A pasted book is never applied straight away: it overwrites the one underneath, so the user
+    /// is shown exactly what will happen and has to confirm.
     /// </summary>
     /// <param name="swap">
     /// True for a drag, which exchanges the two books; false for a paste, which overwrites the

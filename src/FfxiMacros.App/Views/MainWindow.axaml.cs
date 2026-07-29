@@ -6,6 +6,7 @@ using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -19,9 +20,6 @@ namespace FfxiMacros.App.Views;
 
 public partial class MainWindow : Window
 {
-    /// <summary>Key under which a dragged macro slot or book travels in the drag payload.</summary>
-    private const string DragFormat = "ffxi-macro-node";
-
     private object? _dragged;
     private object? _pressedNode;
     private Point _pressPosition;
@@ -37,8 +35,6 @@ public partial class MainWindow : Window
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel);
-        AddHandler(DragDrop.DragOverEvent, OnDragOver);
-        AddHandler(DragDrop.DropEvent, OnDrop);
     }
 
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
@@ -131,7 +127,17 @@ public partial class MainWindow : Window
     /// gesture instead — the slot empties, the macro follows the cursor, the slot it would land on
     /// lights up, and on release the two swap by sliding past each other.
     /// </remarks>
-    private Button? _carriedFrom;
+    private Control? _carriedFrom;
+
+    /// <summary>
+    /// Which kind of thing is in hand, so the drop target is looked for among its own.
+    /// </summary>
+    /// <remarks>
+    /// A macro lands in a macro slot and a book lands on a book row. Asking the hit test for
+    /// « whatever can be dropped on » would let a book land in the palette, where nothing would
+    /// happen and the gesture would simply have been ignored.
+    /// </remarks>
+    private bool _carryingBooks;
 
     /// <summary>
     /// The sheet a carried macro is drawn on, looked up rather than taken from the generated field.
@@ -147,7 +153,7 @@ public partial class MainWindow : Window
 
     private Border? _carried;
     private Point _grabOffset;
-    private Button? _dropTarget;
+    private Control? _dropTarget;
 
     /// <summary>Long enough to read as a movement, short enough not to feel like a delay.</summary>
     private static readonly TimeSpan SwapDuration = TimeSpan.FromMilliseconds(150);
@@ -161,37 +167,110 @@ public partial class MainWindow : Window
 
     private bool IsCarrying => _carried is not null;
 
-    /// <summary>Lifts a macro out of its slot and puts it under the cursor.</summary>
-    private void StartCarrying(Button slot, Point pointer)
+    /// <summary>Lifts a macro out of its slot, or a book out of the list, and puts it under the cursor.</summary>
+    private void StartCarrying(Control source, Point pointer)
     {
-        if (Layer is not { } layer || slot.TranslatePoint(default, layer) is not { } origin)
-            return;
-
-        _carriedFrom = slot;
-        _grabOffset = pointer - origin;
-
-        _carried = new Border
+        if (Layer is not { } layer
+            || source.TranslatePoint(default, layer) is not { } origin
+            || Ghost(source) is not { } ghost)
         {
-            Classes = { "ghost" },
-            Width = slot.Bounds.Width,
-            Height = slot.Bounds.Height,
-            Child = new TextBlock
-            {
-                Text = (slot.DataContext as MacroSlotViewModel)?.DisplayName ?? "",
-                FontSize = 12.5,
-                FontWeight = FontWeight.SemiBold,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
+            return;
+        }
 
-            // No transitions while it is being carried. They belong to the landing, and left on
-            // here they smooth every single mouse move: the macro then trails the cursor by a
-            // sixth of a second, which reads as the window struggling to keep up.
-        };
+        _carriedFrom = source;
+        _grabOffset = pointer - origin;
+        _carried = ghost;
 
         MoveCarried(pointer);
         layer.Children.Add(_carried);
-        slot.Classes.Add("dragging");
+        source.Classes.Add("dragging");
+    }
+
+    /// <summary>
+    /// What is drawn travelling: the thing itself, not a description of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// No transitions are given here. They belong to the landing, and left on while it is carried
+    /// they smooth every single mouse move — the thing then trails the cursor by a sixth of a
+    /// second, which reads as the window struggling to keep up.
+    /// </para>
+    /// <para>
+    /// Both are photographed rather than rebuilt. A book card is a dozen bound pieces tinted by its
+    /// job, and a macro slot carries the key that fires it above its name — a hand-made stand-in
+    /// dropped that key, and would have drifted from the real thing at the first restyling anyway.
+    /// The picture is the control, whatever the control happens to be that day.
+    /// </para>
+    /// </remarks>
+    private static Border? Ghost(Control source, double opacity = 1)
+    {
+        if (Picture(source) is not { } picture)
+            return null;
+
+        return new Border
+        {
+            Classes = { source.DataContext is BookNodeViewModel ? "ghostCard" : "ghostSlot" },
+            Width = source.Bounds.Width,
+            Height = source.Bounds.Height,
+            Opacity = opacity,
+            Child = picture,
+        };
+    }
+
+    /// <summary>
+    /// A picture of a control, whole, taken at the screen's own scale so it stays crisp.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rendering a control draws it <em>where it sits in its parent</em>: its own offset is part of
+    /// the drawing. A bitmap the size of the control alone therefore loses whatever that offset
+    /// pushes past the far edge — three pixels of a macro slot, which is enough to see. So the
+    /// bitmap is made large enough to hold the offset too, and the offset is cropped back off.
+    /// </para>
+    /// <para>
+    /// One pixel per unit, and no resolution of its own. The screen's scaling is deliberately left
+    /// out of both: rendering draws in units, so a frame sized in scaled pixels held only as much
+    /// of the control as the scale allowed and the rest came out blank — and a resolution asked for
+    /// on top of that scaled the drawing a second time, which put the left side of the card under
+    /// the cursor with its text a quarter too large. At 100% every one of those factors is one and
+    /// each version looked perfect, which is how three of them shipped.
+    /// </para>
+    /// <para>
+    /// The cost is a picture enlarged by the screen's scaling rather than drawn at it — softer than
+    /// the row it came from, on a display above 100%, for as long as it is in the air.
+    /// </para>
+    /// </remarks>
+    private static Control? Picture(Control source)
+    {
+        var bounds = source.Bounds;
+        var size = new PixelSize((int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom));
+
+        if (size.Width <= 0 || size.Height <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+            return null;
+
+        var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
+        bitmap.Render(source);
+
+        return new Border
+        {
+            Width = bounds.Width,
+            Height = bounds.Height,
+            ClipToBounds = true,
+            Child = new Image
+            {
+                Source = bitmap,
+
+                // Filled into the exact size the control occupies, offset and all. The pixels then
+                // land one for one on the screen at any scaling, because the bitmap was rendered at
+                // that same scaling — nothing here is stretched, it is only stopped from guessing.
+                Stretch = Stretch.Fill,
+                Width = bounds.Right,
+                Height = bounds.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(-bounds.X, -bounds.Y, 0, 0),
+            },
+        };
     }
 
     private void MoveCarried(Point pointer)
@@ -203,17 +282,20 @@ public partial class MainWindow : Window
         Canvas.SetTop(_carried, pointer.Y - _grabOffset.Y);
     }
 
-    /// <summary>Lights up the slot the macro would land on, and only that one.</summary>
+    /// <summary>Lights up the place it would land, and only that one.</summary>
     private void HighlightDropTarget(Point pointer)
     {
-        var slot = SlotButtonAt(pointer);
-        if (ReferenceEquals(slot, _dropTarget))
+        var landing = CarriableAt(pointer);
+        if (ReferenceEquals(landing, _dropTarget))
             return;
 
         _dropTarget?.Classes.Remove("dropTarget");
-        _dropTarget = ReferenceEquals(slot, _carriedFrom) ? null : slot;
+        _dropTarget = ReferenceEquals(landing, _carriedFrom) ? null : landing;
         _dropTarget?.Classes.Add("dropTarget");
     }
+
+    /// <summary>Where what is in hand could land: a macro slot, or a book row.</summary>
+    private Control? CarriableAt(Point point) => _carryingBooks ? BookRowAt(point) : SlotButtonAt(point);
 
     /// <summary>
     /// The macro slot button under a point, or null.
@@ -234,8 +316,20 @@ public partial class MainWindow : Window
         return null;
     }
 
+    /// <summary>The book card under a point, or null. The card, not the pieces drawn inside it.</summary>
+    private Border? BookRowAt(Point point)
+    {
+        for (var visual = this.InputHitTest(point) as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Border { DataContext: BookNodeViewModel } row && row.Classes.Contains("card"))
+                return row;
+        }
+
+        return null;
+    }
+
     /// <summary>
-    /// Puts the macro down: the two slots slide past each other, and the swap lands as they arrive.
+    /// Puts it down: the two slide past each other, and the swap lands as they arrive.
     /// </summary>
     private async void DropCarried(bool copy)
     {
@@ -246,19 +340,29 @@ public partial class MainWindow : Window
         _carried = null;
         _carriedFrom = null;
         _dropTarget = null;
+        _carryingBooks = false;
         onto?.Classes.Remove("dropTarget");
 
         if (carried is null || from is null || Layer is not { } layer)
             return;
 
-        var source = from.DataContext as MacroSlotViewModel;
-        var target = onto?.DataContext as MacroSlotViewModel;
+        // A book move that needs an answer first is not shown happening. The card goes back where
+        // it came from and the banner puts the question — showing the two books trading places and
+        // then snapping back would be a promise the editor has not made.
+        Action? ask = null;
+        if (onto?.DataContext is BookNodeViewModel wanted
+            && from.DataContext is BookNodeViewModel dragged
+            && ViewModel?.CanTransferBookAtOnce(dragged, wanted) == false)
+        {
+            ask = () => ViewModel?.RequestBookTransfer(dragged, wanted, swap: !copy);
+            onto = null;
+        }
 
         // The slide is given to it now, for the one movement it has left to make.
         carried.Transitions = Sliding();
 
         // Nowhere to land: it goes back where it came from rather than vanishing.
-        Border? returning = target is not null && !copy ? Lift(onto!, from) : null;
+        Border? returning = onto is not null && !copy ? Lift(onto, from) : null;
 
         if ((onto ?? from).TranslatePoint(default, layer) is { } landing)
         {
@@ -275,8 +379,18 @@ public partial class MainWindow : Window
         from.Classes.Remove("dragging");
         onto?.Classes.Remove("dragging");
 
-        if (source is not null && target is not null)
-            ViewModel?.TransferMacro(source, target, copy);
+        switch (from.DataContext, onto?.DataContext)
+        {
+            case (MacroSlotViewModel source, MacroSlotViewModel target):
+                ViewModel?.TransferMacro(source, target, copy);
+                break;
+
+            case (BookNodeViewModel source, BookNodeViewModel target):
+                ViewModel?.TransferBook(source, target, swap: !copy);
+                break;
+        }
+
+        ask?.Invoke();
     }
 
     /// <summary>
@@ -286,30 +400,17 @@ public partial class MainWindow : Window
     /// A swap is two movements. Showing only the one under the cursor would leave the other slot
     /// changing without explanation, which is the very thing that made the old behaviour abrupt.
     /// </remarks>
-    private Border? Lift(Button slot, Button towards)
+    private Border? Lift(Control slot, Control towards)
     {
         if (Layer is not { } layer
             || slot.TranslatePoint(default, layer) is not { } start
-            || towards.TranslatePoint(default, layer) is not { } end)
+            || towards.TranslatePoint(default, layer) is not { } end
+            || Ghost(slot, opacity: 0.75) is not { } moving)
         {
             return null;
         }
 
-        var moving = new Border
-        {
-            Classes = { "ghost" },
-            Width = slot.Bounds.Width,
-            Height = slot.Bounds.Height,
-            Opacity = 0.75,
-            Child = new TextBlock
-            {
-                Text = (slot.DataContext as MacroSlotViewModel)?.DisplayName ?? "",
-                FontSize = 12.5,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-            Transitions = Sliding(),
-        };
+        moving.Transitions = Sliding();
 
         Canvas.SetLeft(moving, start.X);
         Canvas.SetTop(moving, start.Y);
@@ -350,7 +451,7 @@ public partial class MainWindow : Window
         return null;
     }
 
-    private async void OnPointerMoved(object? sender, PointerEventArgs e)
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
         Point position = e.GetPosition(this);
 
@@ -372,23 +473,21 @@ public partial class MainWindow : Window
         if (Math.Abs(position.X - _pressPosition.X) < 5 && Math.Abs(position.Y - _pressPosition.Y) < 5)
             return;
 
-        // A macro is carried by the editor, which can draw it; a book still travels through
-        // Windows' drag and drop, since it is dropped on a tree far from where it was picked up.
-        if (_dragged is MacroSlotViewModel && SlotButtonAt(_pressPosition) is { } slot)
+        // Both are carried by the editor rather than handed to Windows, which carries data and not
+        // a picture. A book used to travel through the system's drag and drop and arrived without
+        // ceremony; it now leaves its row and follows the cursor exactly as a macro does.
+        _carryingBooks = _dragged is BookNodeViewModel;
+
+        if (CarriableAt(_pressPosition) is { } lifted)
         {
             _dragged = null;
             e.Pointer.Capture(this);
-            StartCarrying(slot, position);
+            StartCarrying(lifted, position);
             return;
         }
 
-        object payload = _dragged;
+        _carryingBooks = false;
         _dragged = null;
-
-        var data = new DataObject();
-        data.Set(DragFormat, payload);
-
-        await DragDrop.DoDragDrop(e, data, DragDropEffects.Move | DragDropEffects.Copy);
     }
 
     /// <summary>Puts down whatever the pointer was carrying.</summary>
@@ -400,52 +499,6 @@ public partial class MainWindow : Window
         e.Pointer.Capture(null);
         e.Handled = true;
         DropCarried(e.KeyModifiers.HasFlag(KeyModifiers.Control));
-    }
-
-    private void OnDragOver(object? sender, DragEventArgs e)
-    {
-        e.DragEffects = Target(e) is null
-            ? DragDropEffects.None
-            : e.KeyModifiers.HasFlag(KeyModifiers.Control) ? DragDropEffects.Copy : DragDropEffects.Move;
-
-        e.Handled = true;
-    }
-
-    private void OnDrop(object? sender, DragEventArgs e)
-    {
-        object? source = e.Data.Get(DragFormat);
-        object? target = Target(e);
-        e.Handled = true;
-
-        if (ViewModel is not { } viewModel || source is null || target is null || ReferenceEquals(source, target))
-            return;
-
-        bool copy = e.KeyModifiers.HasFlag(KeyModifiers.Control);
-
-        switch (source, target)
-        {
-            // Inside the palette: Ctrl copies, a plain drag swaps the two slots.
-            case (MacroSlotViewModel from, MacroSlotViewModel to):
-                viewModel.TransferMacro(from, to, copy);
-                break;
-
-            // Books overwrite ten files at once, so the drop only proposes the operation.
-            case (BookNodeViewModel from, BookNodeViewModel to):
-                viewModel.RequestBookTransfer(from, to, swap: !copy);
-                break;
-        }
-    }
-
-    /// <summary>The macro slot or book under the cursor during a drag.</summary>
-    private static object? Target(DragEventArgs e)
-    {
-        for (var control = e.Source as Control; control is not null; control = control.Parent as Control)
-        {
-            if (control.DataContext is MacroSlotViewModel or BookNodeViewModel)
-                return control.DataContext;
-        }
-
-        return null;
     }
 
     // ---------------------------------------------------------------- copy and paste

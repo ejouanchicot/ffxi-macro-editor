@@ -110,6 +110,58 @@ public class DragAndDropTests : IDisposable
         Assert.Equal(carried, Slot(onto).Name);
     });
 
+    [Fact]
+    public void DraggingABookOntoAnotherCarriesItAndSwapsThem() => InWindow((window, viewModel) =>
+    {
+        // A book used to travel through the system's drag and drop and arrive without ceremony,
+        // then stop at a banner. It swaps now, so the ordinary drag goes through as directly as a
+        // macro's — carried, lit where it would land, and applied when it gets there.
+        var layer = window.FindControl<Canvas>("DragLayer")!;
+        var (from, onto) = TwoBooks(window);
+        string carried = Book(from).Header;
+        string displaced = Book(onto).Header;
+        Assert.NotEqual(carried, displaced);
+
+        window.MouseDown(Centre(window, from), MouseButton.Left);
+        Pump();
+        window.MouseMove(Centre(window, from) + new Point(4, 40), RawInputModifiers.LeftMouseButton);
+        Pump();
+
+        Assert.Single(layer.Children);                       // the card is under the cursor
+        Assert.Contains("dragging", from.Classes);           // and its row is left hollow
+
+        window.MouseMove(Centre(window, onto), RawInputModifiers.LeftMouseButton);
+        Pump();
+
+        Assert.Contains("dropTarget", onto.Classes);
+
+        window.MouseUp(Centre(window, onto), MouseButton.Left);
+        Settle();
+
+        var books = BookRows(window);
+        Assert.Equal(displaced, Book(books[0]).Header);
+        Assert.Equal(carried, Book(books[3]).Header);
+        Assert.Empty(layer.Children);
+    });
+
+    [Fact]
+    public void ABookIsNotMovedWhenSomethingHasToBeAskedFirst() => InWindow((_, viewModel) =>
+    {
+        // An unsaved edit is thrown away by the reload a book move needs, so the move stops and
+        // asks. The view leans on this answer before it animates anything: showing two cards trade
+        // places and then snap back would promise something the editor has not done.
+        viewModel.CurrentSet!.Macros[0].Name = "changed";
+        var books = viewModel.Characters.OfType<CharacterNodeViewModel>().First().Books.ToList();
+        string before = books[0].Header;
+
+        Assert.False(viewModel.CanTransferBookAtOnce(books[0], books[3]));
+
+        viewModel.TransferBook(books[0], books[3], swap: true);
+
+        Assert.NotNull(viewModel.PendingBookOperation);              // asked, not done
+        Assert.Equal(before, books[0].Header);
+    });
+
     // ---------------------------------------------------------------- the window under test
 
     private void InWindow(Action<MainWindow, MainWindowViewModel> scenario) => Dispatcher.UIThread.Invoke(() =>
@@ -154,8 +206,22 @@ public class DragAndDropTests : IDisposable
 
     private static MacroSlotViewModel Slot(Button button) => (MacroSlotViewModel)button.DataContext!;
 
-    private static Point Centre(MainWindow window, Button button) =>
-        button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window) ?? default;
+    /// <summary>The book cards, in the order they are listed.</summary>
+    private static List<Border> BookRows(MainWindow window) =>
+        [.. window.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.DataContext is BookNodeViewModel && b.Classes.Contains("card"))];
+
+    private static (Border From, Border Onto) TwoBooks(MainWindow window)
+    {
+        var rows = BookRows(window);
+        Assert.True(rows.Count >= 4, "the character should list its books");
+        return (rows[0], rows[3]);
+    }
+
+    private static BookNodeViewModel Book(Border row) => (BookNodeViewModel)row.DataContext!;
+
+    private static Point Centre(MainWindow window, Control control) =>
+        control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window) ?? default;
 
     private static void Pump() => Dispatcher.UIThread.RunJobs();
 
